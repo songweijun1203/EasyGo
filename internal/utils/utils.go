@@ -8,6 +8,5 @@ import "fmt"
 */
 
 func Test() {
-	// 这里可以放置一些测试代码
-	fmt.Println("这是utils包中的Test函数")
+	fmt.Println("utils包中的Test函数被调用")
 }

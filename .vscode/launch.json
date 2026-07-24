@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+         {
+            "name": "Attach to Debug Binary",
+            "type": "go",
+            "request": "launch",
+            "mode": "exec", 
+            // 指向你预编译的文件（确保该文件已存在）
+            "program": "${workspaceFolder}/build/bin/myapp_debug.exe", 
+            "args": [] 
+        }
+        ,
+        {
+            "name": "Debug EasyGo (OpenGL)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            // 指向 main.go 所在的目录
+            "program": "${workspaceFolder}/cmd/myapp",
+            // 关键：传递构建参数，禁用内联和优化，确保调试信息完整
+            "buildFlags": "-gcflags=\"all=-N -l\"",
+            // 关键：显式开启 CGO，否则 go-gl 无法加载
+            "env": {
+                "CGO_ENABLED": "1"
+            },
+            // 如果需要在调试时传入命令行参数，在这里添加
+            "args": []
+        }
+       
+    ]
+}
+
+//go build -gcflags="all=-N -l" -o myapp_debug.exe ./cmd/myapp
+//Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
