@@ -1,13 +1,13 @@
 package main
 
 import (
+	"EasyGo/internal/xglwidget"
 	"fmt" // 替换为 fmt，用于格式化错误
 	"log"
 	"runtime"
 	"strings"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
-	"github.com/go-gl/glfw/v3.4/glfw"
 )
 
 func init() {
@@ -15,74 +15,118 @@ func init() {
 }
 
 func main() {
-	if err := glfw.Init(); err != nil {
+	widget, err := xglwidget.NewXGLWidget()
+	if err != nil {
 		log.Fatalln("failed to initialize glfw:", err)
-	}
-	defer glfw.Terminate()
-
-	glfw.WindowHint(glfw.ContextVersionMajor, 4)
-	glfw.WindowHint(glfw.ContextVersionMinor, 1)
-	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
-	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
-
-	window, err := glfw.CreateWindow(800, 600, "Go Render Engine - Triangle", nil, nil)
-	if err != nil {
-		log.Fatalln("failed to create window:", err)
-	}
-	window.MakeContextCurrent()
-
-	if err := gl.Init(); err != nil {
-		log.Fatalln("failed to init gl:", err)
-	}
-	log.Println("OpenGL Version:", gl.GoStr(gl.GetString(gl.VERSION)))
-
-	vertices := []float32{
-		-0.5, -0.5, 0.0,
-		0.5, -0.5, 0.0,
-		0.0, 0.5, 0.0,
+		return
 	}
 
-	var VAO, VBO uint32
-	gl.GenVertexArrays(1, &VAO)
-	gl.BindVertexArray(VAO)
+	widget.Run()
 
-	gl.GenBuffers(1, &VBO)
-	gl.BindBuffer(gl.ARRAY_BUFFER, VBO)
-	gl.BufferData(gl.ARRAY_BUFFER, len(vertices)*4, gl.Ptr(vertices), gl.STATIC_DRAW)
+	/*
+		if err := glfw.Init(); err != nil {
+			log.Fatalln("failed to initialize glfw:", err)
+		}
+		defer glfw.Terminate()
 
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, false, 3*4, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
+		//glfw.WindowHint(glfw.ContextVersionMajor, 4)
+		//glfw.WindowHint(glfw.ContextVersionMinor, 1)
+		//glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
+		//glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
+		glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
+		glfw.WindowHint(glfw.Resizable, glfw.True)
 
-	gl.BindBuffer(gl.ARRAY_BUFFER, 0)
-	gl.BindVertexArray(0)
+		window, err := glfw.CreateWindow(800, 600, "Go Render Engine - Triangle", nil, nil)
+		if err != nil {
+			log.Fatalln("failed to create window:", err)
+		}
 
-	shaderProgram, err := newShaderProgram(
-		`#version 330 core
-		layout (location = 0) in vec3 aPos;
-		void main() {
-			gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-		}`+"\x00",
-		`#version 330 core
-		out vec4 FragColor;
-		void main() {
-			FragColor = vec4(1.0, 0.5, 0.2, 1.0);
-		}`+"\x00",
-	)
-	if err != nil {
-		log.Fatalln("failed to compile shader:", err)
-	}
+		defer window.Destroy()
+		//window.MakeContextCurrent()
 
-	for !window.ShouldClose() {
-		gl.ClearColor(0.1, 0.1, 0.2, 1.0)
-		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+		// 获取窗口的 HWND（Windows 平台特有）
+		hwndRaw := window.GetWin32Window() // 返回 uintptr
+		hwnd := uintptr(unsafe.Pointer(hwndRaw))
+		if hwnd == 0 {
+			log.Fatalln("failed to get HWND")
+		}
 
-		gl.UseProgram(shaderProgram)
-		gl.BindVertexArray(VAO)
-		gl.DrawArrays(gl.TRIANGLES, 0, 3)
+		// 创建并激活 XOpenGLContext
+		ctx := xopengl.NewXOpenGLContext()
+		if !ctx.Create(hwnd) {
+			log.Fatalln("failed to create OpenGL context with XOpenGLContext")
+		}
+		defer ctx.Reset()
 
-		window.SwapBuffers()
-		glfw.PollEvents()
-	}
+		if !ctx.MakeCurrent() {
+			log.Fatalln("failed to make context current")
+		}
+		defer ctx.DoneCurrent()
+
+		if err := gl.Init(); err != nil {
+			log.Fatalln("failed to init gl:", err)
+		}
+		log.Println("OpenGL Version:", gl.GoStr(gl.GetString(gl.VERSION)))
+
+		vertices := []float32{
+			-0.5, -0.5, 0.0,
+			0.5, -0.5, 0.0,
+			0.0, 0.5, 0.0,
+		}
+
+		vao := xopengl.NewXOpenGLVertexArrayObjec()
+		vao.Create()
+
+		vbo := xopengl.NewXOpenGLBuffer(xopengl.BufferTypeVertexBuffer)
+		vbo.SetUsagePattern(xopengl.UsageStaticDraw)
+		vbo.Create()
+		vbo.Bind()
+		vbo.AllocateEmpty(len(vertices) * 4)
+		vbo.Write(0, len(vertices)*4, gl.Ptr(vertices))
+		vbo.Release()
+		//readBuffer, _ := vbo.Read(0, len(vertices)*4)
+		//ss := xq_utils.As[float32](readBuffer)
+		//fmt.Println(readBuffer.GetInternalData())
+		//fmt.Println(ss.GetInternalData())
+
+		vao.AddBuffer(0, vbo, 3, xopengl.GLDataType_float, uint32(3*unsafe.Sizeof(float32(0))), 0, false)
+		vao.EnableAttribute(0)
+
+		vbo.Release()
+		vao.Release()
+
+		shaderProgram, err := newShaderProgram(
+			`#version 330 core
+			layout (location = 0) in vec3 aPos;
+			void main() {
+				gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+			}`+"\x00",
+			`#version 330 core
+			out vec4 FragColor;
+			void main() {
+				FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+			}`+"\x00",
+		)
+		if err != nil {
+			log.Fatalln("failed to compile shader:", err)
+		}
+
+		for !window.ShouldClose() {
+			gl.ClearColor(0.1, 0.1, 0.2, 1.0)
+			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+			gl.UseProgram(shaderProgram)
+			//gl.BindVertexArray(VAO)
+			vao.Bind()
+			gl.DrawArrays(gl.TRIANGLES, 0, 3)
+
+			//window.SwapBuffers()
+			ctx.SwapBuffers()
+			glfw.PollEvents()
+		}
+		vbo.Destory()
+		vao.Destory()
+	*/
 }
 
 func newShaderProgram(vertexSrc, fragmentSrc string) (uint32, error) {

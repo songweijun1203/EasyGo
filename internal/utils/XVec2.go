@@ -1,28 +1,28 @@
 package utils
 
 //二维向量
-type Vev2[T XNumber] struct {
+type Vec2[T XNumber] struct {
 	X, Y T
 }
 
-type Vev2f = Vev2[float32]
-type Vev2d = Vev2[float64]
-type Vev2i = Vev2[int]
-type Vev2u = Vev2[uint]
+type Vec2f = Vec2[float32]
+type Vec2d = Vec2[float64]
+type Vec2i = Vec2[int]
+type Vec2u = Vec2[uint]
 
 //模长
-func (v Vev2[T]) Norm() float64 {
+func (v Vec2[T]) Norm() float64 {
 	return float64(v.X*v.X + v.Y*v.Y)
 }
 
 //向量缩放
-func (v *Vev2[T]) Scale(scalar T) {
+func (v *Vec2[T]) Scale(scalar T) {
 	v.X *= scalar
 	v.Y *= scalar
 }
 
 //向量归一化
-func (v *Vev2[T]) Normalize() {
+func (v *Vec2[T]) Normalize() {
 	n := v.Norm()
 	if n != 0 {
 		v.X /= T(n)
@@ -31,16 +31,16 @@ func (v *Vev2[T]) Normalize() {
 }
 
 //向量加法
-func (v Vev2[T]) Add(other Vev2[T]) Vev2[T] {
-	return Vev2[T]{X: v.X + other.X, Y: v.Y + other.Y}
+func (v Vec2[T]) Add(other Vec2[T]) Vec2[T] {
+	return Vec2[T]{X: v.X + other.X, Y: v.Y + other.Y}
 }
 
 //向量减法
-func (v Vev2[T]) Sub(other Vev2[T]) Vev2[T] {
-	return Vev2[T]{X: v.X - other.X, Y: v.Y - other.Y}
+func (v Vec2[T]) Sub(other Vec2[T]) Vec2[T] {
+	return Vec2[T]{X: v.X - other.X, Y: v.Y - other.Y}
 }
 
 //向量点积
-func (v Vev2[T]) Dot(other Vev2[T]) T {
+func (v Vec2[T]) Dot(other Vec2[T]) T {
 	return v.X*other.X + v.Y*other.Y
 }

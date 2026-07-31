@@ -24,6 +24,10 @@ func (a *XDataArray1D[T]) SetName(n string) {
 	a.name = n
 }
 
+func (a *XDataArray1D[T]) GetInternalData() (d []T) {
+	return a.data
+}
+
 func (a *XDataArray1D[T]) SetComponent(n int) {
 	a.component = n
 }
@@ -99,6 +103,27 @@ func (a *XDataArray1D[T]) ForEach_tuple(op func(values []T)) {
 	num := a.GetTupleNum()
 	for i := 0; i < num; i++ {
 		op(a.GetTuple(i))
+	}
+}
+
+func (a *XDataArray1D[T]) GetPointer() (p unsafe.Pointer) {
+	return unsafe.Pointer(unsafe.SliceData(a.data))
+}
+
+func As[U XNumber, T XNumber](a *XDataArray1D[T]) *XDataArray1D[U] {
+	inputByteNum := a.GetBytesNum()
+	inputPtr := a.GetPointer()
+
+	var zero_u U
+	targetSize := int(unsafe.Sizeof(zero_u))
+
+	newLen := inputByteNum / targetSize
+	newData := unsafe.Slice((*U)(inputPtr), newLen)
+
+	return &XDataArray1D[U]{
+		data:      newData,
+		component: a.component,
+		name:      a.name,
 	}
 }
 
