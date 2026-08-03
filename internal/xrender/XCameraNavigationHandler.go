@@ -72,6 +72,10 @@ func (i *XCameraNavigationHandler) KeyReleaseEvent(eventData xbaserender.KeyEven
 
 func (i *XCameraNavigationHandler) MouseMoveEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
 	fmt.Printf("MouseMoveEvent\n")
+	m := eventData.Modifier
+	if m == xbaserender.ControlModifier {
+		fmt.Println("ctrl")
+	}
 	i.SigMouseMove.Emit(eventData)
 }
 

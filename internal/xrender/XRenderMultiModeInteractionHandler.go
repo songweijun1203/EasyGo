@@ -61,3 +61,107 @@ func (h *XRenderMultiModeInteractionHandler) LeftButtonPressEvent(eventData xbas
 		hanlder.LeftButtonPressEvent(eventData, e)
 	}
 }
+
+func (h *XRenderMultiModeInteractionHandler) LeftButtonReleaseEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.LeftButtonReleaseEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) LeftButtonDoublePressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.LeftButtonDoublePressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) RightButtonPressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.RightButtonPressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) RightButtonReleaseEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.RightButtonReleaseEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) RightButtonDoublePressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.RightButtonDoublePressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MiddleButtonPressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MiddleButtonPressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MiddleButtonReleaseEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MiddleButtonReleaseEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MiddleButtonDoublePressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MiddleButtonDoublePressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MouseMoveEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MouseMoveEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MouseWheelForwardEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MouseWheelForwardEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) MouseWheelBackwardEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.MouseWheelBackwardEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) KeyPressEvent(eventData xbaserender.KeyEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.KeyPressEvent(eventData, e)
+	}
+}
+
+func (h *XRenderMultiModeInteractionHandler) KeyReleaseEvent(eventData xbaserender.KeyEvent, e *xbaserender.XEvent) {
+	//根据当前模式选择处理器
+	hanlder := h.GetCameraNavigationHandler()
+	if hanlder != nil {
+		hanlder.KeyReleaseEvent(eventData, e)
+	}
+}
