@@ -13,6 +13,7 @@ const (
 )
 
 const (
+	Key_Unknown        KeyType = 0
 	Key_Escape         KeyType = 0x01000000 // misc keys
 	Key_Tab            KeyType = 0x01000001
 	Key_Backtab        KeyType = 0x01000002

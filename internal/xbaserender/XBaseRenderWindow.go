@@ -8,4 +8,6 @@ type XBaseRenderWindow interface {
 	SwapBuffers()
 	Init()
 	GetEventDispatcher() XBaseRenderWindowEventDispatch
+	AddRender(XBaseRender) bool
+	GetRenders() []XBaseRender
 }

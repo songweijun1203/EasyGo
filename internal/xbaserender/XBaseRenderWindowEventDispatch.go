@@ -16,27 +16,22 @@ type KeyEvent struct {
 	Key      KeyType
 }
 
+type XEvent struct {
+	isStopPropagate bool
+}
+
+func (e *XEvent) StopPropagate() {
+	e.isStopPropagate = true //不再传播
+}
+
+func (e *XEvent) IsStopPropagate() bool {
+	return e.isStopPropagate
+}
+
 type XBaseRenderWindowEventDispatch interface {
 	SetRenderWindow(ren XBaseRenderWindow)
 	GetRenderWindow() XBaseRenderWindow
-	GetSigLeftButtonPress() *gsignal.Event[MouseButtonEvent]
-	GetSigLeftButtonRelease() *gsignal.Event[MouseButtonEvent]
-	GetSigLeftButtonDoublePress() *gsignal.Event[MouseButtonEvent]
-
-	GetSigMiddleButtonPress() *gsignal.Event[MouseButtonEvent]
-	GetSigMiddleButtonRelease() *gsignal.Event[MouseButtonEvent]
-	GetSigMiddleButtonDoublePress() *gsignal.Event[MouseButtonEvent]
-
-	GetSigRightButtonPress() *gsignal.Event[MouseButtonEvent]
-	GetSigRightButtonRelease() *gsignal.Event[MouseButtonEvent]
-	GetSigRightButtonDoublePress() *gsignal.Event[MouseButtonEvent]
-
-	GetSigResize() *gsignal.Event[xutils.Vec2i]
-	GetSigKeyPress() *gsignal.Event[KeyEvent]
-	GetSigKeyRelease() *gsignal.Event[KeyEvent]
-	GetSigMouseMove() *gsignal.Event[KeyEvent]
-	GetSigMouseWheelForward() *gsignal.Event[KeyEvent]
-	GetSigMouseWheelBackward() *gsignal.Event[KeyEvent]
+	GetXRenderWindowEventDispatchSig() *XRenderWindowEventDispatchSig
 }
 
 type XRenderWindowEventDispatchSig struct {
@@ -54,9 +49,9 @@ type XRenderWindowEventDispatchSig struct {
 
 	SigResize gsignal.Event[xutils.Vec2i] //窗口大小调整
 
-	SigKeyPress           gsignal.Event[KeyEvent] //键盘摁下
-	SigKeyRelease         gsignal.Event[KeyEvent] //键盘弹起
-	SigMouseMove          gsignal.Event[KeyEvent] //鼠标移动
-	SigMouseWheelForward  gsignal.Event[KeyEvent] //鼠标前进
-	SigMouseWheelBackward gsignal.Event[KeyEvent] //鼠标后退
+	SigKeyPress           gsignal.Event[KeyEvent]         //键盘摁下
+	SigKeyRelease         gsignal.Event[KeyEvent]         //键盘弹起
+	SigMouseMove          gsignal.Event[MouseButtonEvent] //鼠标移动
+	SigMouseWheelForward  gsignal.Event[MouseButtonEvent] //鼠标前进
+	SigMouseWheelBackward gsignal.Event[MouseButtonEvent] //鼠标后退
 }

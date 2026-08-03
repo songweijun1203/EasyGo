@@ -2,6 +2,7 @@ package main
 
 import (
 	"EasyGo/internal/xglwidget"
+	"EasyGo/internal/xrender"
 	"fmt" // 替换为 fmt，用于格式化错误
 	"log"
 	"runtime"
@@ -21,6 +22,9 @@ func main() {
 		return
 	}
 
+	renderWindow := widget.GetRenderWindow()
+	render, _ := xrender.NewXRender()
+	renderWindow.AddRender(render)
 	widget.Run()
 
 	/*

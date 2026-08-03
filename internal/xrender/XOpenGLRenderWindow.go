@@ -4,6 +4,7 @@ import (
 	"EasyGo/internal/xbaserender"
 	"EasyGo/internal/xopengl"
 	"fmt"
+	"sync"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 )
@@ -11,6 +12,8 @@ import (
 type XOpenGLRenderWindow struct {
 	ctx          *xopengl.XOpenGLContext
 	eventDisptch xbaserender.XBaseRenderWindowEventDispatch
+	renders      []xbaserender.XBaseRender
+	mu           sync.Mutex // 保护 renders
 }
 
 func NewXOpenGLRenderWindow() *XOpenGLRenderWindow {
@@ -18,6 +21,7 @@ func NewXOpenGLRenderWindow() *XOpenGLRenderWindow {
 	w := &XOpenGLRenderWindow{
 		ctx:          nil,
 		eventDisptch: dispatch,
+		renders:      make([]xbaserender.XBaseRender, 0),
 	}
 	dispatch.SetRenderWindow(w)
 	return w
@@ -46,6 +50,10 @@ func (renWin *XOpenGLRenderWindow) Render() error {
 
 	gl.ClearColor(0.1, 0.1, 0.2, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+	for _, render := range renWin.renders {
+		render.Render()
+	}
 
 	renWin.SwapBuffers()
 	renWin.DoneCurrent()
@@ -83,4 +91,28 @@ func (renWin *XOpenGLRenderWindow) isCtxInit() bool {
 
 func (renWin *XOpenGLRenderWindow) GetEventDispatcher() xbaserender.XBaseRenderWindowEventDispatch {
 	return renWin.eventDisptch
+}
+
+func (renWin *XOpenGLRenderWindow) AddRender(render xbaserender.XBaseRender) bool {
+	if render == nil {
+		return false
+	}
+
+	renWin.mu.Lock()
+	defer renWin.mu.Unlock()
+
+	// 遍历现有列表，直接比较接口值（适用于指针类型）
+	for _, r := range renWin.renders {
+		if r == render {
+			return false // 已存在，不重复添加
+		}
+	}
+
+	renWin.renders = append(renWin.renders, render)
+	render.SetRenderWindow(renWin)                   //设置渲染窗口
+	render.(*XRender).connectToRenderWindowSignals() //连接信号
+	return true
+}
+func (renWin *XOpenGLRenderWindow) GetRenders() []xbaserender.XBaseRender {
+	return renWin.renders
 }

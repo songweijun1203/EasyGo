@@ -1,10 +1,7 @@
 package xrender
 
 import (
-	xutils "EasyGo/internal/utils"
 	"EasyGo/internal/xbaserender"
-
-	"github.com/quasilyte/gsignal"
 )
 
 type XRenderWindowEventDispatch struct {
@@ -20,6 +17,11 @@ func (d *XRenderWindowEventDispatch) GetRenderWindow() xbaserender.XBaseRenderWi
 	return d.renderWindow
 }
 
+func (d *XRenderWindowEventDispatch) GetXRenderWindowEventDispatchSig() *xbaserender.XRenderWindowEventDispatchSig {
+	return &d.XRenderWindowEventDispatchSig
+}
+
+/*
 func (d *XRenderWindowEventDispatch) GetSigLeftButtonPress() *gsignal.Event[xbaserender.MouseButtonEvent] {
 	return &d.SigLeftButtonPress
 }
@@ -79,3 +81,4 @@ func (d *XRenderWindowEventDispatch) GetSigMouseWheelForward() *gsignal.Event[xb
 func (d *XRenderWindowEventDispatch) GetSigMouseWheelBackward() *gsignal.Event[xbaserender.KeyEvent] {
 	return &d.SigMouseWheelBackward
 }
+*/
