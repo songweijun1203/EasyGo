@@ -71,6 +71,7 @@ func NewXGLWidget() (*XGLWidget, error) {
 	}
 
 	win.setupCallbacks()
+	win.renderWindow.GetEventDispatcher().GetXRenderWindowEventDispatchSig().SigResize.Emit(xutils.Vec2i{X: 400, Y: 300})
 	return win, nil
 }
 
@@ -84,7 +85,7 @@ func (w *XGLWidget) OnMouseButton(button glfw.MouseButton, action glfw.Action, m
 	dispatch := w.renderWindow.GetEventDispatcher()
 	var sig *gsignal.Event[xbaserender.MouseButtonEvent]
 	x, y := w.window.GetCursorPos()
-	w.pos = xutils.Vec2i{X: int(x), Y: int(y)}
+	w.pos = xutils.Vec2i{X: int32(x), Y: int32(y)}
 	//pos := xutils.Vec2i{X: int(x), Y: int(y)} // 根据需要取整
 	switch button {
 	case glfw.MouseButton1:
@@ -144,10 +145,10 @@ func (w *XGLWidget) OnMouseButton(button glfw.MouseButton, action glfw.Action, m
 
 // 鼠标移动事件回调
 func (w *XGLWidget) OnMouseMove(x, y float64) {
-	w.pos = xutils.Vec2i{X: int(x), Y: int(y)}
+	w.pos = xutils.Vec2i{X: int32(x), Y: int32(y)}
 	dispatch := w.renderWindow.GetEventDispatcher()
 	sig := &dispatch.GetXRenderWindowEventDispatchSig().SigMouseMove
-	event := xbaserender.MouseButtonEvent{Modifier: w.mod, Pos: xutils.Vec2i{X: int(x), Y: int(y)}}
+	event := xbaserender.MouseButtonEvent{Modifier: w.mod, Pos: xutils.Vec2i{X: int32(x), Y: int32(y)}}
 	sig.Emit(event)
 }
 
@@ -174,7 +175,7 @@ func (w *XGLWidget) OnMouseWheel(xoff, yoff float64) {
 func (w *XGLWidget) OnWindowResize(width, height int) {
 	dispatch := w.renderWindow.GetEventDispatcher()
 	sig := &dispatch.GetXRenderWindowEventDispatchSig().SigResize
-	sig.Emit(xutils.Vec2i{X: width, Y: height})
+	sig.Emit(xutils.Vec2i{X: int32(width), Y: int32(height)})
 }
 
 // 键盘事件回调
@@ -247,6 +248,8 @@ func (win *XGLWidget) Run() {
 
 // Close 清理资源
 func (win *XGLWidget) Close() {
+	//窗口关闭之前需要清除资源
+	win.GetRenderWindow().Close()
 	if win.window != nil {
 		win.window.Destroy()
 	}

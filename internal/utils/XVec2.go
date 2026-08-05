@@ -5,11 +5,6 @@ type Vec2[T XNumber] struct {
 	X, Y T
 }
 
-type Vec2f = Vec2[float32]
-type Vec2d = Vec2[float64]
-type Vec2i = Vec2[int]
-type Vec2u = Vec2[uint]
-
 //模长
 func (v Vec2[T]) Norm() float64 {
 	return float64(v.X*v.X + v.Y*v.Y)
@@ -44,3 +39,13 @@ func (v Vec2[T]) Sub(other Vec2[T]) Vec2[T] {
 func (v Vec2[T]) Dot(other Vec2[T]) T {
 	return v.X*other.X + v.Y*other.Y
 }
+
+type Vec2f = Vec2[float32]
+type Vec2d = Vec2[float64]
+type Vec2i = Vec2[int32]
+type Vec2u = Vec2[uint32]
+
+type Point2f = Vec2f
+type Point2d = Vec2d
+type Point2i = Vec2i
+type Point2u = Vec2u

@@ -1,19 +1,21 @@
 package xrender
 
 import (
+	xutils "EasyGo/internal/utils"
 	"EasyGo/internal/xbaserender"
 	"EasyGo/internal/xopengl"
+	"EasyGo/internal/xsignal"
 	"fmt"
 	"sync"
-
-	"github.com/go-gl/gl/v4.1-core/gl"
 )
 
 type XOpenGLRenderWindow struct {
 	ctx          *xopengl.XOpenGLContext
 	eventDisptch xbaserender.XBaseRenderWindowEventDispatch
 	renders      []xbaserender.XBaseRender
-	mu           sync.Mutex // 保护 renders
+	mu           sync.Mutex          // 保护 renders
+	connector    *xsignal.XConnector //信号管理
+	windowSize   xutils.Vec2i
 }
 
 func NewXOpenGLRenderWindow() *XOpenGLRenderWindow {
@@ -22,8 +24,10 @@ func NewXOpenGLRenderWindow() *XOpenGLRenderWindow {
 		ctx:          nil,
 		eventDisptch: dispatch,
 		renders:      make([]xbaserender.XBaseRender, 0),
+		connector:    xsignal.NewXConnector(),
 	}
 	dispatch.SetRenderWindow(w)
+	w.Init()
 	return w
 }
 
@@ -35,7 +39,24 @@ func (renWin *XOpenGLRenderWindow) SetWindowId(winId uintptr) {
 	}
 }
 func (renWin *XOpenGLRenderWindow) Init() {
-	//do nth
+	renWin.bindSignalSlot()
+}
+
+func (renWin *XOpenGLRenderWindow) GetWindowWidth() int32 {
+	return renWin.windowSize.X
+}
+func (renWin *XOpenGLRenderWindow) GetWindowHeigth() int32 {
+	return renWin.windowSize.Y
+}
+
+func (renWin *XOpenGLRenderWindow) SlotResize(s xutils.Vec2i) {
+	//记录窗口大小
+	renWin.windowSize = s
+}
+
+func (renWin *XOpenGLRenderWindow) bindSignalSlot() {
+	sig := renWin.GetEventDispatcher().GetXRenderWindowEventDispatchSig()
+	xsignal.ConnectSlot(renWin.connector, &sig.SigResize, renWin.SlotResize, "SlotResize")
 }
 
 func (renWin *XOpenGLRenderWindow) Render() error {
@@ -47,9 +68,6 @@ func (renWin *XOpenGLRenderWindow) Render() error {
 	if !renWin.MakeCurrent() {
 		return fmt.Errorf("MakeCurrent fail!")
 	}
-
-	gl.ClearColor(0.1, 0.1, 0.2, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 	for _, render := range renWin.renders {
 		render.Render()
@@ -115,4 +133,23 @@ func (renWin *XOpenGLRenderWindow) AddRender(render xbaserender.XBaseRender) boo
 }
 func (renWin *XOpenGLRenderWindow) GetRenders() []xbaserender.XBaseRender {
 	return renWin.renders
+}
+
+// 渲染窗口关闭的时候，需要关闭opengl相关资源
+func (renWin *XOpenGLRenderWindow) Close() {
+	defer func() {
+		//渲染器资源清理
+		renders := renWin.GetRenders()
+		for _, render := range renders {
+			render.Close()
+		}
+
+		//上下文资源清理
+		if renWin.ctx != nil {
+			renWin.ctx.Close()
+			renWin.ctx = nil
+		}
+
+	}()
+
 }

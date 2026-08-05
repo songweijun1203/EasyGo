@@ -84,7 +84,7 @@ func (a *XOpenGLBuffer) Create() (uint32, error) {
 
 // 绑定buffer
 func (a *XOpenGLBuffer) Bind() error {
-	bindId, err := xglGetBindDataBufferId(a.bufferType)
+	bindId, err := GetBindDataBufferId(a.bufferType)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (a *XOpenGLBuffer) Release() error {
 	if !a.IsCreated() {
 		return fmt.Errorf("XOpenGLBuffer not created!")
 	}
-	bindId, err := xglGetBindDataBufferId(a.bufferType)
+	bindId, err := GetBindDataBufferId(a.bufferType)
 	if err != nil {
 		return err
 	}

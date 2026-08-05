@@ -336,7 +336,7 @@ func (c *XOpenGLContext) GetContextMsg() string {
 }
 
 // Reset 释放所有资源
-func (c *XOpenGLContext) Reset() {
+func (c *XOpenGLContext) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
