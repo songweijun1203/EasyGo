@@ -1,7 +1,7 @@
 package xbaserender
 
 import (
-	xutils "EasyGo/internal/utils"
+	"EasyGo/internal/xutils"
 
 	"github.com/quasilyte/gsignal"
 )

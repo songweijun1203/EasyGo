@@ -1,4 +1,4 @@
-package utils
+package xutils
 
 //约束定义
 type XNumber interface {

@@ -1,6 +1,6 @@
 package xbaserender
 
-import xutils "EasyGo/internal/utils"
+import "EasyGo/internal/xutils"
 
 type XBaseRenderWindow interface {
 	SetWindowId(winId uintptr)

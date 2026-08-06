@@ -1,4 +1,6 @@
-package utils
+package xutils
+
+import "math"
 
 //二维向量
 type Vec2[T XNumber] struct {
@@ -7,22 +9,27 @@ type Vec2[T XNumber] struct {
 
 //模长
 func (v Vec2[T]) Norm() float64 {
-	return float64(v.X*v.X + v.Y*v.Y)
+	return math.Sqrt(float64(v.X*v.X + v.Y*v.Y))
 }
 
 //向量缩放
-func (v *Vec2[T]) Scale(scalar T) {
-	v.X *= scalar
-	v.Y *= scalar
+func (v Vec2[T]) Scale(scalar T) Vec2[T] {
+	return Vec2[T]{
+		X: v.X * scalar,
+		Y: v.Y * scalar,
+	}
 }
 
 //向量归一化
-func (v *Vec2[T]) Normalize() {
+func (v Vec2[T]) Normalize() Vec2[T] {
 	n := v.Norm()
 	if n != 0 {
-		v.X /= T(n)
-		v.Y /= T(n)
+		return Vec2[T]{
+			X: v.X / T(n),
+			Y: v.Y / T(n),
+		}
 	}
+	return v
 }
 
 //向量加法
@@ -35,9 +42,19 @@ func (v Vec2[T]) Sub(other Vec2[T]) Vec2[T] {
 	return Vec2[T]{X: v.X - other.X, Y: v.Y - other.Y}
 }
 
-//向量点积
+//向量内积
 func (v Vec2[T]) Dot(other Vec2[T]) T {
 	return v.X*other.X + v.Y*other.Y
+}
+
+//向量外积
+func (v Vec2[T]) Outer(row Vec2[T]) Mat2[T] {
+	return Mat2[T]{
+		data: [4]T{
+			v.X * row.X, v.Y * row.X, //col0
+			v.X * row.Y, v.Y * row.Y, //col1
+		},
+	}
 }
 
 type Vec2f = Vec2[float32]

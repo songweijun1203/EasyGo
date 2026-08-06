@@ -1,7 +1,7 @@
 package xopengl
 
 import (
-	xutils "EasyGo/internal/utils"
+	"EasyGo/internal/xutils"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 )

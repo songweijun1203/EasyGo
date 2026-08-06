@@ -1,8 +1,8 @@
 package xrender
 
 import (
-	xutils "EasyGo/internal/utils"
 	"EasyGo/internal/xbaserender"
+	"EasyGo/internal/xutils"
 )
 
 type XInteractionEventHandler struct {

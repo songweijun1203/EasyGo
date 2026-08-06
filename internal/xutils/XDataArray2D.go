@@ -1,4 +1,4 @@
-package utils
+package xutils
 
 type XDataArray2D[T XNumber] struct {
 	*XDataArray1D[T]

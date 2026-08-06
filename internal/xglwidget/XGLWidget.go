@@ -1,9 +1,9 @@
 package xglwidget
 
 import (
-	xutils "EasyGo/internal/utils"
 	"EasyGo/internal/xbaserender"
 	"EasyGo/internal/xrender"
+	"EasyGo/internal/xutils"
 	"fmt"
 	"sync"
 	"unsafe"

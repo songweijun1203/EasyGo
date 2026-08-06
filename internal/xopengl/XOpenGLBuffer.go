@@ -1,7 +1,7 @@
 package xopengl
 
 import (
-	xq_utils "EasyGo/internal/utils"
+	"EasyGo/internal/xutils"
 	"fmt"
 	"unsafe"
 
@@ -146,7 +146,7 @@ func (a *XOpenGLBuffer) AllocateEmpty(size int) error {
 }
 
 // AllocateFromData
-func AllocateFromData[T xq_utils.XNumber](b *XOpenGLBuffer, data xq_utils.XDataArray1D[T]) error {
+func AllocateFromData[T xutils.XNumber](b *XOpenGLBuffer, data xutils.XDataArray1D[T]) error {
 	if data.GetSize() == 0 {
 		return b.AllocateEmpty(0)
 	}
@@ -174,8 +174,8 @@ func (a *XOpenGLBuffer) Write(offset int, count int, ptr unsafe.Pointer) error {
 }
 
 // 读取buffer数据
-func (a *XOpenGLBuffer) Read(offset int, count int) (*xq_utils.XDataArray1D[uint8], error) {
-	data := xq_utils.NewXUInt8Array1D()
+func (a *XOpenGLBuffer) Read(offset int, count int) (*xutils.XDataArray1D[uint8], error) {
+	data := xutils.NewXUInt8Array1D()
 	data.SetNumOfTuple(count)
 	gl.GetBufferSubData(uint32(a.bufferType), offset, count, data.GetPointer())
 	return data, CheckGLerror()

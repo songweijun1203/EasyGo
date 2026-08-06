@@ -8,6 +8,8 @@ require (
 )
 
 require (
+	github.com/g3n/engine v0.2.0 // indirect
 	github.com/quasilyte/gsignal v0.0.0-20240802120557-5896b3add8c1 // indirect
 	golang.org/x/sys v0.47.0 // indirect
+	gonum.org/v1/gonum v0.17.0 // indirect
 )

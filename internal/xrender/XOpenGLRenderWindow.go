@@ -1,10 +1,10 @@
 package xrender
 
 import (
-	xutils "EasyGo/internal/utils"
 	"EasyGo/internal/xbaserender"
 	"EasyGo/internal/xopengl"
 	"EasyGo/internal/xsignal"
+	"EasyGo/internal/xutils"
 	"fmt"
 	"sync"
 )
