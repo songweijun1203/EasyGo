@@ -1,12 +1,15 @@
 package xutils
 
-import "fmt"
+import (
+	"math"
+)
 
-/*
-函数小写，表示私有，外部包无法访问
-函数大写，表示公有，外部包可以访问
-*/
-
-func Test() {
-	fmt.Println("utils包中的Test函数被调用")
+func Radians(deg float32) float32 {
+	return math.Pi * deg / 180
 }
+
+func Degrees(rad float32) float32 {
+	return rad * 180 / math.Pi
+}
+
+//旋转矩阵转欧拉角

@@ -124,6 +124,8 @@ import "C"
 import (
 	"sync"
 	"unsafe"
+
+	"github.com/go-gl/gl/v4.1-core/gl"
 )
 
 // WGL 常量
@@ -155,6 +157,10 @@ const (
 	GL_CONTEXT_CORE_PROFILE_BIT  = 0x00000001
 	GL_CONTEXT_COMPATIBILITY_BIT = 0x00000002
 	GL_CONTEXT_FLAG_DEBUG_BIT    = 0x00000002
+)
+
+var (
+	glInitOnce sync.Once
 )
 
 // XOpenGLContext 结构体
@@ -259,6 +265,12 @@ func (c *XOpenGLContext) Create(winId uintptr) bool {
 	} else {
 		c.contextMsg += "调试标志:0"
 	}
+
+	glInitOnce.Do(func() {
+		if err := gl.Init(); err != nil {
+			panic(err)
+		}
+	})
 
 	return true
 }

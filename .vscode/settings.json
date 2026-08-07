@@ -1,0 +1,44 @@
+{
+    "workbench.colorTheme": "Visual Studio Dark - C++",
+    "editor.accessibilityPageSize": 12,
+    "editor.fontFamily": "Sitka Text",
+    "cmake.pinnedCommands": [
+        "workbench.action.tasks.configureTaskRunner",
+        "workbench.action.tasks.runTask"
+    ],
+    "terminal.integrated.fontSize": 15,
+    "terminal.integrated.env.windows":{
+        "PATH":"C:\\Qt\\5.15.2\\msvc2019_64\\bin;${env:PATH}"
+    },
+    "cmake.options.statusBarVisibility": "visible",
+    "terminal.integrated.automationProfile.linux": {},
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "chat.commandCenter.enabled": false,
+    "security.workspace.trust.untrustedFiles": "open",
+    "security.workspace.trust.enabled": false,
+    "terminal.integrated.fontFamily": "monospace",
+    "editor.fontVariations": false,
+    "editor.fontLigatures": false,
+    "fittencode.languagePreference.displayPreference": "zh-cn",
+    "fittencode.languagePreference.commentPreference": "zh-cn",
+    "cmake.debugConfig": {},
+    "fittencode.selection.showCodeLens": false,
+    "workbench.secondarySideBar.defaultVisibility": "visible",
+    "chat.viewSessions.orientation": "stacked",
+    "github.copilot.nextEditSuggestions.eagerness": "high",
+    "workbench.editor.useModal": "some",
+    "explorer.compactFolders": false,
+    "workbench.iconTheme": "material-icon-theme",
+    "VsCodeTaskButtons.tasks": [
+        {
+        "label": "$(play) BuildGo",
+        "task": "build-debug",
+        "color": "warning"
+        },
+        {
+            "label": "🧹 清理", // 使用 Emoji
+            "task": "clean",
+            "color": "default" // 显示为黄色
+        },
+    ]
+}

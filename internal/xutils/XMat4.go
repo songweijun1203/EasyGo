@@ -1,5 +1,7 @@
 package xutils
 
+import "fmt"
+
 type Mat4[T XNumber] struct {
 	data [16]T
 }
@@ -95,7 +97,7 @@ func (m *Mat4[T]) MulVec(v Vec4[T]) Vec4[T] {
 	col1 := m.ColData(1) //第1列数据
 	col2 := m.ColData(2) //第2列数据
 	col3 := m.ColData(3) //第3列数据
-	return col0.Scale(v.X).Add(col1.Scale(v.Y)).Add(col2.Scale(v.Y)).Add(col3.Scale(v.W))
+	return col0.Scale(v.X).Add(col1.Scale(v.Y)).Add(col2.Scale(v.Z)).Add(col3.Scale(v.W))
 }
 
 // 矩阵乘法,右乘 m*n
@@ -120,6 +122,7 @@ func (m *Mat4[T]) MulLeft(n Mat4[T]) Mat4[T] {
 	return n.MulRight(*m)
 }
 
+//获取左上角3*3子矩阵，一般只有矩阵表示齐次矩阵时会调用
 func (m *Mat4[T]) SubMat3() Mat3[T] {
 	return Mat3[T]{
 		data: [9]T{
@@ -128,6 +131,17 @@ func (m *Mat4[T]) SubMat3() Mat3[T] {
 			m.data[8], m.data[9], m.data[10],
 		},
 	}
+}
+
+func (m *Mat4[T]) FormatPrint() {
+	fmt.Println("matrix: ")
+	for r := 0; r < 4; r++ {
+		for c := 0; c < 4; c++ {
+			fmt.Printf("%v ", m.At(uint32(c), uint32(r)))
+		}
+		fmt.Println()
+	}
+
 }
 
 type Mat4f = Mat4[float32]

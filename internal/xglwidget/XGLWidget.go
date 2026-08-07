@@ -8,7 +8,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/go-gl/gl/v4.1-core/gl"
 	"github.com/go-gl/glfw/v3.4/glfw"
 	"github.com/quasilyte/gsignal"
 )
@@ -61,14 +60,16 @@ func NewXGLWidget() (*XGLWidget, error) {
 
 	win.renderWindow.SetWindowId(hwnd)
 	//加载opengl函数指针
-	if win.renderWindow.MakeCurrent() {
-		glInitOnce.Do(func() {
-			if err := gl.Init(); err != nil {
-				panic(err)
-			}
-		})
-		win.renderWindow.DoneCurrent()
-	}
+	/*
+		if win.renderWindow.MakeCurrent() {
+			glInitOnce.Do(func() {
+				if err := gl.Init(); err != nil {
+					panic(err)
+				}
+			})
+			win.renderWindow.DoneCurrent()
+		}
+	*/
 
 	win.setupCallbacks()
 	win.renderWindow.GetEventDispatcher().GetXRenderWindowEventDispatchSig().SigResize.Emit(xutils.Vec2i{X: 400, Y: 300})

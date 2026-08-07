@@ -11,6 +11,12 @@ type XAffine3[T XNumber] struct {
 	matrix Mat4[T]
 }
 
+func NewAffine3[T XNumber]() XAffine3[T] {
+	return XAffine3[T]{
+		matrix: NewMat4[T](),
+	}
+}
+
 func NewAffine3f() XAffine3f {
 	return XAffine3f{
 		matrix: NewMat4f(),
@@ -40,8 +46,8 @@ func (a *XAffine3[T]) ComputeRotationScaling() (r Mat3[T], s Mat3[T]) {
 	a_double := Mat3d{
 		data: [9]float64{
 			float64(a.matrix.data[0]), float64(a.matrix.data[1]), float64(a.matrix.data[2]),
-			float64(a.matrix.data[3]), float64(a.matrix.data[4]), float64(a.matrix.data[5]),
-			float64(a.matrix.data[6]), float64(a.matrix.data[7]), float64(a.matrix.data[8]),
+			float64(a.matrix.data[4]), float64(a.matrix.data[5]), float64(a.matrix.data[6]),
+			float64(a.matrix.data[8]), float64(a.matrix.data[9]), float64(a.matrix.data[10]),
 		},
 	}
 	mat := mat3fToMatDense(a_double)
@@ -68,8 +74,8 @@ func (a *XAffine3[T]) ComputeScalingRotation() (s Mat3[T], r Mat3[T]) {
 	a_double := Mat3d{
 		data: [9]float64{
 			float64(a.matrix.data[0]), float64(a.matrix.data[1]), float64(a.matrix.data[2]),
-			float64(a.matrix.data[3]), float64(a.matrix.data[4]), float64(a.matrix.data[5]),
-			float64(a.matrix.data[6]), float64(a.matrix.data[7]), float64(a.matrix.data[8]),
+			float64(a.matrix.data[4]), float64(a.matrix.data[5]), float64(a.matrix.data[6]),
+			float64(a.matrix.data[8]), float64(a.matrix.data[9]), float64(a.matrix.data[10]),
 		},
 	}
 	mat := mat3fToMatDense(a_double)
@@ -90,6 +96,46 @@ func (a *XAffine3[T]) ComputeScalingRotation() (s Mat3[T], r Mat3[T]) {
 				T(r_double.data[6]), T(r_double.data[7]), T(r_double.data[8]),
 			},
 		}
+}
+
+func (a *XAffine3[T]) MulRight(b XAffine3[T]) XAffine3[T] {
+	m := a.matrix.MulRight(b.matrix)
+	a_new := NewAffine3[T]()
+	a_new.SetMatrix(m)
+	return a_new
+}
+
+func (a *XAffine3[T]) MulLeft(b XAffine3[T]) XAffine3[T] {
+	m := a.matrix.MulLeft(b.matrix)
+	a_new := NewAffine3[T]()
+	a_new.SetMatrix(m)
+	return a_new
+}
+
+// 叠加变换
+func (a *XAffine3[T]) Translate(tx, ty, tz T) {
+	t := Translate(tx, ty, tz)
+	*a = a.MulRight(t)
+}
+
+func (a *XAffine3[T]) Scale(sx, sy, sz T) {
+	t := Scale(sx, sy, sz)
+	*a = a.MulRight(t)
+}
+
+func (a *XAffine3[T]) RotateX(radian float32) {
+	r := RotateX[T](radian)
+	*a = a.MulRight(r)
+}
+
+func (a *XAffine3[T]) RotateY(radian float32) {
+	r := RotateY[T](radian)
+	*a = a.MulRight(r)
+}
+
+func (a *XAffine3[T]) RotateZ(radian float32) {
+	r := RotateZ[T](radian)
+	*a = a.MulRight(r)
 }
 
 type XAffine3f = XAffine3[float32]
@@ -229,14 +275,55 @@ func computeScalingRotation(M *mat.Dense) (R, S *mat.Dense) {
 	return R, S
 }
 
-// 获取旋转矩阵
-func Scale(sx, sy, sz float32) XAffine3f {
-	m := NewMat4f()
+// 基本矩阵
+func Translate[T XNumber](tx, ty, tz T) XAffine3[T] {
+	a := NewAffine3[T]()
+	a.matrix.SetData(3, 0, tx)
+	a.matrix.SetData(3, 1, ty)
+	a.matrix.SetData(3, 2, tz)
+	return a
+}
+
+func Scale[T XNumber](sx, sy, sz T) XAffine3[T] {
+	m := NewMat4[T]()
 	m.SetData(0, 0, sx)
 	m.SetData(1, 1, sy)
 	m.SetData(2, 2, sz)
 
-	a := NewAffine3f()
+	a := NewAffine3[T]()
 	a.matrix = m
+	return a
+}
+
+func RotateZ[T XNumber](radian float32) XAffine3[T] {
+	a := NewAffine3[T]()
+	a.matrix.data = [16]T{
+		T(math.Cos(float64(radian))), T(math.Sin(float64(radian))), 0, 0,
+		-T(math.Sin(float64(radian))), T(math.Cos(float64(radian))), 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
+	}
+	return a
+}
+
+func RotateX[T XNumber](radian float32) XAffine3[T] {
+	a := NewAffine3[T]()
+	a.matrix.data = [16]T{
+		1, 0, 0, 0,
+		0, T(math.Cos(float64(radian))), T(math.Sin(float64(radian))), 0,
+		0, -T(math.Sin(float64(radian))), T(math.Cos(float64(radian))), 0,
+		0, 0, 0, 1,
+	}
+	return a
+}
+
+func RotateY[T XNumber](radian float32) XAffine3[T] {
+	a := NewAffine3[T]()
+	a.matrix.data = [16]T{
+		T(math.Cos(float64(radian))), 0, -T(math.Sin(float64(radian))), 0,
+		0, 1, 0, 0,
+		T(math.Sin(float64(radian))), 0, T(math.Cos(float64(radian))), 0,
+		0, 0, 0, 1,
+	}
 	return a
 }

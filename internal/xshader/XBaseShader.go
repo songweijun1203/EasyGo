@@ -1,9 +1,12 @@
 package xshader
 
+import "C"
 import (
 	"EasyGo/internal/xopengl"
 	"EasyGo/internal/xutils"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/go-gl/gl/v4.1-core/gl"
 )
@@ -24,18 +27,40 @@ type XShader struct {
 	id uint32
 }
 
+func NewXBaseShader() *XShader {
+	return &XShader{}
+}
+
 func (shader *XShader) Create() error {
 	shader.id = gl.CreateProgram()
 	return xopengl.CheckGLerror()
 }
 
 func (shader *XShader) CompileFromCode(t ShaderType, shaderCode string) (id uint32, err error) {
-	return 0, nil
+	//编译代码
+	shaderCode = shaderCode + "\x00"
+	fragmentShader := gl.CreateShader(uint32(t))
+
+	cFragmentSrc, free := gl.Strs(shaderCode)
+	defer free()
+	//fmt.Printf("Shader source: %q\n", shaderCode)
+
+	gl.ShaderSource(fragmentShader, 1, cFragmentSrc, nil)
+
+	gl.CompileShader(fragmentShader)
+
+	return fragmentShader, checkCompileErrors(fragmentShader, t)
 }
 
 func (shader *XShader) CompileFromFile(t ShaderType, shaderFile string) (id uint32, err error) {
 	//读取文件内容
-	return 0, nil
+	data, err := os.ReadFile(shaderFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	str := string(data)
+	return shader.CompileFromCode(t, str)
 }
 
 func (shader *XShader) Link(ids []uint32) error {
@@ -46,7 +71,7 @@ func (shader *XShader) Link(ids []uint32) error {
 	gl.LinkProgram(shader.id)
 
 	//检查编译问题
-
+	checkCompileErrors(shader.id, PROGRAME)
 	for _, id := range ids {
 		gl.DeleteShader(id)
 	}
@@ -54,15 +79,29 @@ func (shader *XShader) Link(ids []uint32) error {
 }
 
 func (shader *XShader) Use() error {
-	return nil
+	gl.UseProgram(shader.id)
+	return xopengl.CheckGLerror()
 }
 
 func (shader *XShader) UnUse() error {
-	return nil
+	gl.UseProgram(0)
+	return xopengl.CheckGLerror()
+}
+
+func (shader *XShader) Close() error {
+	gl.DeleteShader(shader.id)
+	return xopengl.CheckGLerror()
 }
 
 func (shader *XShader) SetBool(name string, value bool) error {
-	return nil
+	val := 0
+	if value {
+		val = 1
+	}
+
+	gl.Str(name)
+	gl.Uniform1i(gl.GetUniformLocation(shader.id, gl.Str(name)), int32(val))
+	return xopengl.CheckGLerror()
 }
 
 func (shader *XShader) SetInt(name string, value int32) error {
@@ -103,7 +142,7 @@ func (shader *XShader) SetMat4(name string, m xutils.Mat4f) error {
 
 // --------------------------------------------------------------------
 // 检查编译错误信息
-func checkCompileErrors(id uint32, t ShaderType) {
+func checkCompileErrors(id uint32, t ShaderType) error {
 	mapType2String := make(map[ShaderType]string)
 	mapType2String[VERTEX] = "VERTEX"
 	mapType2String[FRAGMENT] = "FRAGMENT"
@@ -124,6 +163,7 @@ func checkCompileErrors(id uint32, t ShaderType) {
 			fmt.Printf("ERROR::SHADER_COMPILATION_ERROR of type: %s\n ", mapType2String[t])
 			fmt.Println(logMsg)
 			fmt.Println("-- --------------------------------------------------- -- ")
+			return fmt.Errorf("logMsg")
 		}
 	} else {
 		gl.GetProgramiv(id, gl.LINK_STATUS, &success)
@@ -133,6 +173,8 @@ func checkCompileErrors(id uint32, t ShaderType) {
 			logMsg := string(infoLog[:logLength])
 			fmt.Println(logMsg)
 			fmt.Println("-- --------------------------------------------------- -- ")
+			return fmt.Errorf("logMsg")
 		}
 	}
+	return nil
 }
