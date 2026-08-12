@@ -25,6 +25,9 @@ func main() {
 	renderWindow := widget.GetRenderWindow()
 	render, _ := xrender.NewXRender()
 	renderWindow.AddRender(render)
+
+	//render添加渲染节点
+
 	widget.Run()
 
 	/*

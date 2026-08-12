@@ -64,6 +64,9 @@ func (r *XRender) Render() {
 	xopengl.XglScissor(r.GetConvertViewPort())
 	gl.ClearColor(0.1, 0.1, 0.2, 1.0)
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+	//渲染工作
+
 	r.DoneCurrent()
 }
 
