@@ -1,0 +1,85 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "prepare-build-dir",
+            "type": "shell",
+            "command": "mkdir",
+            "args": [
+                "-p",
+                "${workspaceFolder}/build/bin"
+            ],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-NoProfile",
+                    "-Command",
+                    "New-Item -ItemType Directory -Force '${workspaceFolder}/build/bin' | Out-Null"
+                ]
+            },
+            "presentation": {
+                "echo": false,
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "build-debug",
+            "type": "shell",
+            "command": "go",
+            "args": [
+                "build",
+                "-o",
+                "${workspaceFolder}/build/bin/myapp_debug",
+                "-gcflags",
+                "all=-N -l",
+                "${workspaceFolder}/cmd/myapp"
+            ],
+            "windows": {
+                "args": [
+                    "build",
+                    "-o",
+                    "${workspaceFolder}/build/bin/myapp_debug.exe",
+                    "-gcflags",
+                    "all=-N -l",
+                    "${workspaceFolder}/cmd/myapp"
+                ]
+            },
+            "dependsOn": "prepare-build-dir",
+            "dependsOrder": "sequence",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "rm",
+            "args": [
+                "-rf",
+                "${workspaceFolder}/build/bin"
+            ],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-NoProfile",
+                    "-Command",
+                    "if (Test-Path '${workspaceFolder}/build/bin') { Remove-Item -Recurse -Force '${workspaceFolder}/build/bin' }"
+                ]
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}
