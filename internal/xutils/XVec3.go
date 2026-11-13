@@ -2,17 +2,17 @@ package xutils
 
 import "math"
 
-//三维向量
+// 三维向量
 type Vec3[T XNumber] struct {
 	X, Y, Z T
 }
 
-//模长
+// 模长
 func (v Vec3[T]) Norm() float64 {
 	return math.Sqrt(float64(v.X*v.X + v.Y*v.Y + v.Z*v.Z))
 }
 
-//向量缩放
+// 向量缩放
 func (v Vec3[T]) Scale(scalar T) Vec3[T] {
 	return Vec3[T]{
 		X: v.X * scalar,
@@ -21,7 +21,7 @@ func (v Vec3[T]) Scale(scalar T) Vec3[T] {
 	}
 }
 
-//向量归一化
+// 向量归一化
 func (v Vec3[T]) Normalize() Vec3[T] {
 	n := v.Norm()
 	if n != 0 {
@@ -34,22 +34,22 @@ func (v Vec3[T]) Normalize() Vec3[T] {
 	return v
 }
 
-//向量加法
+// 向量加法
 func (v Vec3[T]) Add(other Vec3[T]) Vec3[T] {
 	return Vec3[T]{X: v.X + other.X, Y: v.Y + other.Y, Z: v.Z + other.Z}
 }
 
-//向量减法
+// 向量减法
 func (v Vec3[T]) Sub(other Vec3[T]) Vec3[T] {
 	return Vec3[T]{X: v.X - other.X, Y: v.Y - other.Y, Z: v.Z - other.Z}
 }
 
-//向量点积(内积)
+// 向量点积(内积)
 func (v Vec3[T]) Dot(other Vec3[T]) T {
 	return v.X*other.X + v.Y*other.Y + v.Z*other.Z
 }
 
-//向量外积，列向量X行向量
+// 向量外积，列向量X行向量
 func (v Vec3[T]) Outer(row Vec3[T]) Mat3[T] {
 	return Mat3[T]{
 		data: [9]T{
@@ -60,12 +60,12 @@ func (v Vec3[T]) Outer(row Vec3[T]) Mat3[T] {
 	}
 }
 
-//其次坐标归一化
+// 其次坐标归一化
 func (v Vec3[T]) Homogenize() Vec3[T] {
 	return Vec3[T]{X: v.X / v.Z, Y: v.Y / v.Z, Z: 1}
 }
 
-//向量叉积 v×t
+// 向量叉积 v×t
 func (v Vec3[T]) Cross(t Vec3[T]) Vec3[T] {
 	return Vec3[T]{
 		X: v.Y*t.Z - v.Z*t.Y,

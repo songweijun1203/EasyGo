@@ -1,6 +1,6 @@
 package xutils
 
-//2*2矩阵 列主序
+// 2*2矩阵 列主序
 type Mat2[T XNumber] struct {
 	data [4]T
 }
@@ -23,7 +23,7 @@ func (m *Mat2[T]) SetIdentity() {
 	m.data = [4]T{1, 0, 0, 1}
 }
 
-//获取矩阵
+// 获取矩阵
 func (m *Mat2[T]) Pointer() *T {
 	return &m.data[0]
 }
@@ -53,7 +53,7 @@ func (m *Mat2[T]) SetData(col uint32, row uint32, v T) T {
 	return old
 }
 
-//矩阵相加
+// 矩阵相加
 func (m *Mat2[T]) Add(t Mat2[T]) Mat2[T] {
 	return Mat2[T]{
 		data: [4]T{
@@ -63,7 +63,7 @@ func (m *Mat2[T]) Add(t Mat2[T]) Mat2[T] {
 	}
 }
 
-//获取列数据
+// 获取列数据
 func (m *Mat2[T]) ColData(colIdx uint32) Vec2[T] {
 	if colIdx == 0 {
 		return Vec2[T]{X: m.data[0], Y: m.data[1]}
@@ -76,14 +76,14 @@ func (m *Mat2[T]) ColData(colIdx uint32) Vec2[T] {
 	return Vec2[T]{0, 0}
 }
 
-//矩阵向量乘法
+// 矩阵向量乘法
 func (m *Mat2[T]) MulVec(v Vec2[T]) Vec2[T] {
 	col0 := m.ColData(0)                        //第0列数据
 	col1 := m.ColData(1)                        //第1列数据
 	return col0.Scale(v.X).Add(col1.Scale(v.Y)) //列向量的线性组合
 }
 
-//矩阵乘法,右乘 m*n
+// 矩阵乘法,右乘 m*n
 func (m *Mat2[T]) MulRight(n Mat2[T]) Mat2[T] {
 	c0 := m.MulVec(n.ColData(0))
 	c1 := m.MulVec(n.ColData(1))
@@ -96,7 +96,7 @@ func (m *Mat2[T]) MulRight(n Mat2[T]) Mat2[T] {
 	}
 }
 
-//矩阵乘法,左乘 n*m
+// 矩阵乘法,左乘 n*m
 func (m *Mat2[T]) MulLeft(n Mat2[T]) Mat2[T] {
 	return n.MulRight(*m)
 }

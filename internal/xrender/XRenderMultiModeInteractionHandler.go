@@ -53,7 +53,7 @@ func (h *XRenderMultiModeInteractionHandler) GetDrawHandler() xbaserender.XBaseR
 	return h.drawHandler
 }
 
-//事件转发
+// 事件转发
 func (h *XRenderMultiModeInteractionHandler) LeftButtonPressEvent(eventData xbaserender.MouseButtonEvent, e *xbaserender.XEvent) {
 	//根据当前模式选择处理器
 	hanlder := h.GetCameraNavigationHandler()
