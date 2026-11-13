@@ -7,8 +7,12 @@ import (
 
 // 离屏渲染环境创建测试
 func TestOffsetWindow(t *testing.T) {
-	w, _ := NewXOffsetWindow()
+	w, err := NewXOffsetWindow()
 
+	if err != nil {
+		t.Skipf("OpenGL context unavailable: %v", err)
+	}
+	defer w.Close()
 	ctx := NewXOpenGLContext()
 	ctx.Create(w.WinId())
 
@@ -20,6 +24,5 @@ func TestOffsetWindow(t *testing.T) {
 		ctx.DoneCurrent()
 	}
 
-	defer w.Close()
 	defer ctx.Close() //先执行
 }

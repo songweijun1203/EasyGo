@@ -1,0 +1,62 @@
+name: CI                                   #工作流名称，显示在GitHub Actions页面上
+
+on:                                       #触发条件
+  pull_request:                           #当有pull request时触发
+    branches:                             #指定 pull request 的目标分支
+      - develop
+  push:
+    branches:
+      - develop
+      - master
+  workflow_dispatch: 
+permissions:                              #权限设置
+  contents: read                            #允许读取仓库内容
+  
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:                                     #定义工作流中的作业
+  test:
+    name: Test (${{ matrix.os }})               #作业名称，显示在GitHub Actions页面上
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20                         #作业超时时间，单位为分钟
+    strategy:   
+      fail-fast: false                          #当一个作业失败时，是否立即停止其他作业的执行
+      matrix:                                  #定义矩阵策略
+        os: [macos-latest, windows-latest]     #指定操作系统矩阵，分别为最新的macOS和Windows,会自动生成两个作业，分别在macOS和Windows上运行
+    env: 
+      CGO_ENABLED: "1"                          #设置环境变量CGO_ENABLED为1，启用CGO
+    steps:
+      #第一步：检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4               #检出代码
+      #第二步：安装和设置Go环境
+      - name: Set up go environment
+        uses: actions/setup-go@v5               #官方GitHub Action，用于设置Go环境
+        with:                                   #action的输入参数 
+          go-version-file: go.mod            
+          cache: true                              #启用缓存，缓存Go模块依赖
+      #第三步：确认 CI 已经触发并能在当前 runner 上执行命令
+      - name: Verify CI trigger
+        run: go version
+
+      # 以下检查暂时屏蔽，待 OpenGL 测试和跨平台格式问题处理后再启用。
+      # - name: Check code format
+      #   shell: bash
+      #   run: |
+      #     files="$(gofmt -l $(git ls-files '*.go'))"
+      #     if [ -n "$files" ]; then
+      #       echo "The following files are not formatted:"
+      #       echo "$files"
+      #       exit 1
+      #     fi
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test -timeout 5m ./...
+
+      - name: Build main program
+        run: go build ./cmd/myapp

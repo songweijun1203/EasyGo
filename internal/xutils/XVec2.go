@@ -2,17 +2,17 @@ package xutils
 
 import "math"
 
-//二维向量
+// 二维向量
 type Vec2[T XNumber] struct {
 	X, Y T
 }
 
-//模长
+// 模长
 func (v Vec2[T]) Norm() float64 {
 	return math.Sqrt(float64(v.X*v.X + v.Y*v.Y))
 }
 
-//向量缩放
+// 向量缩放
 func (v Vec2[T]) Scale(scalar T) Vec2[T] {
 	return Vec2[T]{
 		X: v.X * scalar,
@@ -20,7 +20,7 @@ func (v Vec2[T]) Scale(scalar T) Vec2[T] {
 	}
 }
 
-//向量归一化
+// 向量归一化
 func (v Vec2[T]) Normalize() Vec2[T] {
 	n := v.Norm()
 	if n != 0 {
@@ -32,22 +32,22 @@ func (v Vec2[T]) Normalize() Vec2[T] {
 	return v
 }
 
-//向量加法
+// 向量加法
 func (v Vec2[T]) Add(other Vec2[T]) Vec2[T] {
 	return Vec2[T]{X: v.X + other.X, Y: v.Y + other.Y}
 }
 
-//向量减法
+// 向量减法
 func (v Vec2[T]) Sub(other Vec2[T]) Vec2[T] {
 	return Vec2[T]{X: v.X - other.X, Y: v.Y - other.Y}
 }
 
-//向量内积
+// 向量内积
 func (v Vec2[T]) Dot(other Vec2[T]) T {
 	return v.X*other.X + v.Y*other.Y
 }
 
-//向量外积
+// 向量外积
 func (v Vec2[T]) Outer(row Vec2[T]) Mat2[T] {
 	return Mat2[T]{
 		data: [4]T{

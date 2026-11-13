@@ -22,30 +22,33 @@ func TestShader(t *testing.T) {
 	dir := GetConfigDir()
 	println(dir)
 
-	w, _ := xopengl.NewXOffsetWindow()
+	w, err := xopengl.NewXOffsetWindow()
+	if err != nil {
+		t.Skipf("OpenGL context unavailable: %v", err)
+	}
+	defer w.Close()
 
 	ctx := xopengl.NewXOpenGLContext()
-	ctx.Create(w.WinId())
-
-	if ctx.MakeCurrent() {
-		fmt.Println("OPenGL context created success!")
-		{
-			//此处进行GL相关的测试
-			vsPath := filepath.Join(dir, "tri.vs")
-			fsPath := filepath.Join(dir, "tri.fs")
-
-			shader := NewXBaseShader()
-			shader.Create()
-
-			id1, _ := shader.CompileFromFile(VERTEX, vsPath)
-			id2, _ := shader.CompileFromFile(FRAGMENT, fsPath)
-
-			shader.Link([]uint32{id1, id2})
-			shader.Close()
-		}
-		ctx.DoneCurrent()
+	defer ctx.Close()
+	if !ctx.Create(w.WinId()) {
+		t.Skip("OpenGL context creation failed")
 	}
+	if !ctx.MakeCurrent() {
+		t.Skip("OpenGL context could not be made current")
+	}
+	defer ctx.DoneCurrent()
 
-	defer w.Close()
-	defer ctx.Close() //先执行
+	fmt.Println("OPenGL context created success!")
+	// 此处进行GL相关的测试
+	vsPath := filepath.Join(dir, "tri.vs")
+	fsPath := filepath.Join(dir, "tri.fs")
+
+	shader := NewXBaseShader()
+	shader.Create()
+
+	id1, _ := shader.CompileFromFile(VERTEX, vsPath)
+	id2, _ := shader.CompileFromFile(FRAGMENT, fsPath)
+
+	shader.Link([]uint32{id1, id2})
+	shader.Close()
 }
