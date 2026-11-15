@@ -122,7 +122,7 @@ func (m *Mat4[T]) MulLeft(n Mat4[T]) Mat4[T] {
 	return n.MulRight(*m)
 }
 
-//获取左上角3*3子矩阵，一般只有矩阵表示齐次矩阵时会调用
+// 获取左上角3*3子矩阵，一般只有矩阵表示齐次矩阵时会调用
 func (m *Mat4[T]) SubMat3() Mat3[T] {
 	return Mat3[T]{
 		data: [9]T{

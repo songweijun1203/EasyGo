@@ -2,17 +2,17 @@ package xutils
 
 import "math"
 
-//四维向量
+// 四维向量
 type Vec4[T XNumber] struct {
 	X, Y, Z, W T
 }
 
-//模长
+// 模长
 func (v Vec4[T]) Norm() float64 {
 	return math.Sqrt(float64(v.X*v.X + v.Y*v.Y + v.Z*v.Z + v.W*v.W))
 }
 
-//向量缩放
+// 向量缩放
 func (v Vec4[T]) Scale(scalar T) Vec4[T] {
 	return Vec4[T]{
 		X: v.X * scalar,
@@ -22,7 +22,7 @@ func (v Vec4[T]) Scale(scalar T) Vec4[T] {
 	}
 }
 
-//向量归一化
+// 向量归一化
 func (v Vec4[T]) Normalize() Vec4[T] {
 	n := v.Norm()
 	if n != 0 {
@@ -68,7 +68,7 @@ func (v Vec4[T]) Outer(row Vec4[T]) Mat4[T] {
 	}
 }
 
-//其次坐标归一化
+// 其次坐标归一化
 func (v Vec4[T]) Homogenize() Vec4[T] {
 	return Vec4[T]{X: v.X / v.W, Y: v.Y / v.W, Z: v.Z / v.W, W: 1}
 }
