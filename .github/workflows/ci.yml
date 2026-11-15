@@ -4,7 +4,10 @@ on:                                       #触发条件
   pull_request:                           #当有pull request时触发
     branches:                             #指定 pull request 的目标分支
       - develop
-  push:                                   #每次 push 到任意分支时触发
+  push:
+    branches:
+      - develop
+      - master
   workflow_dispatch: 
 permissions:                              #权限设置
   contents: read                            #允许读取仓库内容
@@ -49,11 +52,11 @@ jobs:                                     #定义工作流中的作业
       #       exit 1
       #     fi
 
-      # - name: Run vet
-      #   run: go vet ./...
+      - name: Run vet
+        run: go vet ./...
 
-      # - name: Run tests
-      #   run: go test -timeout 5m ./...
+      - name: Run tests
+        run: go test -timeout 5m ./...
 
-      # - name: Build main program
-      #   run: go build ./cmd/myapp
+      - name: Build main program
+        run: go build ./cmd/myapp

@@ -8,6 +8,7 @@ package xopengl
 #include <GL/gl.h>
 #include <GL/wgl.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 // WGL 扩展函数指针类型
 typedef HGLRC (WINAPI *PFNWGLCREATECONTEXTATTRIBSARBPROC)(HDC, HGLRC, const int*);
@@ -118,6 +119,12 @@ BOOL swapBuffersGo(HDC hdc) { return SwapBuffers(hdc); }
 const char* glGetStringGo(GLenum name) { return (const char*)glGetString(name); }
 void glGetIntegervGo(GLenum pname, GLint* params) { glGetIntegerv(pname, params); }
 
+// Convert integer handles back to Windows handles inside C. Keeping these
+// conversions here avoids unsafe.Pointer warnings from go vet on Windows.
+HWND hwndFromUintptr(uintptr_t value) { return (HWND)(uintptr_t)value; }
+HDC hdcFromUintptr(uintptr_t value) { return (HDC)(uintptr_t)value; }
+HGLRC hglrcFromUintptr(uintptr_t value) { return (HGLRC)(uintptr_t)value; }
+
 // 链接库
 #cgo LDFLAGS: -lopengl32 -lgdi32
 
@@ -199,8 +206,7 @@ func (c *XOpenGLContext) Create(winId uintptr) bool {
 		return false
 	}
 
-	// 关键修复：使用 unsafe.Pointer 进行转换
-	hwnd := (C.HWND)(unsafe.Pointer(winId))
+	hwnd := C.hwndFromUintptr(C.uintptr_t(winId))
 
 	// 1. 获取 DC
 	hdc := C.getDCGo(hwnd)
@@ -286,8 +292,8 @@ func (c *XOpenGLContext) MakeCurrent() bool {
 		return false
 	}
 	if c.refCount == 0 {
-		hdc := C.HDC(unsafe.Pointer(c.nativeDisplay))
-		ctx := C.HGLRC(unsafe.Pointer(c.nativeContext))
+		hdc := C.hdcFromUintptr(C.uintptr_t(c.nativeDisplay))
+		ctx := C.hglrcFromUintptr(C.uintptr_t(c.nativeContext))
 		if C.wglMakeCurrent(hdc, ctx) == 0 {
 			return false
 		}
@@ -318,7 +324,7 @@ func (c *XOpenGLContext) SwapBuffers() {
 	defer c.mu.Unlock()
 
 	if c.isValidLocked() {
-		hdc := C.HDC(unsafe.Pointer(c.nativeDisplay))
+		hdc := C.hdcFromUintptr(C.uintptr_t(c.nativeDisplay))
 		C.swapBuffersGo(hdc)
 	}
 }
@@ -355,13 +361,13 @@ func (c *XOpenGLContext) Close() {
 	defer c.mu.Unlock()
 
 	if c.nativeDisplay != 0 {
-		hdc := C.HDC(unsafe.Pointer(c.nativeDisplay))
+		hdc := C.hdcFromUintptr(C.uintptr_t(c.nativeDisplay))
 		hwnd := C.windowFromDCGo(hdc)
 		C.releaseDCGo(hwnd, hdc)
 	}
 	if c.nativeContext != 0 {
 		C.wglMakeCurrent(nil, nil)
-		ctx := C.HGLRC(unsafe.Pointer(c.nativeContext))
+		ctx := C.hglrcFromUintptr(C.uintptr_t(c.nativeContext))
 		C.wglDeleteContext(ctx)
 	}
 	c.nativeDisplay = 0
