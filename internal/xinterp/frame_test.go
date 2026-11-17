@@ -129,54 +129,49 @@ func findFunctionByName(t *testing.T, pkgs []*packages.Package, funcName string)
 
 func TestControlFlow(t *testing.T) {
 	pkgs := setupSSA(t)
+
 	// 测试 1：add (线性)
-	addFn := findFunctionByName(t, pkgs, "add")
-	f1 := &Frame{
-		fn:    addFn,
-		block: addFn.Blocks[0],
-		env:   make(map[ssa.Value]Value),
-	}
-	println("Params count:", len(addFn.Params))
-	f1.env[addFn.Params[0]] = 5
-	f1.env[addFn.Params[1]] = 7
+	{
+		addFn := findFunctionByName(t, pkgs, "add")
+		result := RunFunction(addFn, 10, 20)
 
-	f1.run()
-
-	if f1.result != 12 {
-		t.Fatalf("add(5, 7) = %v, want 12", f1.result)
+		if result != 30 {
+			t.Fatalf("add(10, 20) = %v, want 30", result)
+		}
+		println("add(10, 20) = ", result.(int))
 	}
-	println("add(5, 7) = ", f1.result.(int))
 
 	// 测试 2：max (if)
-	maxFn := findFunctionByName(t, pkgs, "max")
-	f2 := &Frame{
-		fn:    maxFn,
-		block: maxFn.Blocks[0],
-		env:   make(map[ssa.Value]Value),
-	}
-	f2.env[maxFn.Params[0]] = 10
-	f2.env[maxFn.Params[1]] = 20
+	{
+		maxFn := findFunctionByName(t, pkgs, "max")
+		result := RunFunction(maxFn, 10, 20)
 
-	f2.run()
-
-	if f2.result != 20 {
-		t.Fatalf("max(10, 20) = %v, want 20", f2.result)
+		if result != 20 {
+			t.Fatalf("max(10, 20) = %v, want 20", result)
+		}
+		println("max(10, 20) = ", result.(int))
 	}
-	println("max(10, 20) = ", f2.result.(int))
 
 	// 测试 3：sum (for)
-	sumFn := findFunctionByName(t, pkgs, "sum")
-	f3 := &Frame{
-		fn:    sumFn,
-		block: sumFn.Blocks[0],
-		env:   make(map[ssa.Value]Value),
-	}
-	f3.env[sumFn.Params[0]] = 5
+	{
+		sumFn := findFunctionByName(t, pkgs, "sum")
+		result := RunFunction(sumFn, 5)
 
-	f3.run()
-
-	if f3.result != 15 {
-		t.Fatalf("sum(5) = %v, want 15", f3.result)
+		if result != 15 {
+			t.Fatalf("sum(5) = %v, want 15", result)
+		}
+		println("sum(5) = ", result.(int))
 	}
-	println("sum(5) = ", f3.result.(int))
+
+	//测试 函数调用
+	{
+		addAndmulFn := findFunctionByName(t, pkgs, "addAndMul")
+		result := RunFunction(addAndmulFn, 2, 5, 2)
+
+		if result != 14 {
+			t.Fatalf("addAndmulFn(2,5,2) = %v, want 14", result)
+		}
+		println("addAndmulFn(2,5,2) = ", result.(int))
+
+	}
 }

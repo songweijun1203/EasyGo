@@ -20,3 +20,11 @@ func sum(n int) int {
 	}
 	return total
 }
+
+func mul(a int, factor int) int {
+	return a * factor
+}
+func addAndMul(a, b int, factor int) int {
+	sum := a + b
+	return mul(sum, factor)
+}

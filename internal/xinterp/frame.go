@@ -20,6 +20,23 @@ type Frame struct {
 	result    Value               // 当前帧的返回值，存储了函数执行后的结果
 }
 
+func RunFunction(fn *ssa.Function, args ...Value) Value {
+	f := &Frame{
+		fn:    fn,
+		block: fn.Blocks[0],
+		env:   make(map[ssa.Value]Value),
+	}
+
+	// 绑定参数到环境变量中
+	for i, param := range fn.Params {
+		f.env[param] = args[i]
+	}
+
+	f.run() // 执行当前帧的指令
+
+	return f.result // 返回函数执行的结果
+}
+
 // 执行当前帧的指令，直到遇到返回指令或异常。
 func (f *Frame) run() {
 	for f.block != nil {
@@ -139,6 +156,9 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 			panic(fmt.Sprintf("unsupported UnOp: %v", instr.Op))
 		}
 		return false
+	case *ssa.Call:
+		// 处理函数调用指令
+		return f.executeCall(instr)
 	default:
 		// 处理其他类型的指令
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
@@ -200,6 +220,30 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 		}
 	}
 	panic(fmt.Sprintf("unsupported types for op %v: %T, %T", op, x, y))
+}
+
+// 处理函数调用
+func (f *Frame) executeCall(instr *ssa.Call) bool {
+	callee := instr.Common().Value
+	fn, ok := callee.(*ssa.Function)
+	if !ok {
+		panic(fmt.Sprintf("暂时不支持调用非普通函数: %T", callee))
+	}
+
+	//收集参数
+	var args []Value
+	for _, arg := range instr.Common().Args {
+		args = append(args, f.get(arg))
+	}
+
+	result := RunFunction(fn, args...) // 递归调用，创建一个新的Frame来执行被调用的函数
+
+	// 4. 存结果
+	if fn.Signature.Results().Len() > 0 {
+		f.env[instr] = result
+	}
+
+	return false // 函数调用后继续执行当前帧
 }
 
 // 后续不需要
