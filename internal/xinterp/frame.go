@@ -81,6 +81,8 @@ func (f *Frame) get(v ssa.Value) Value {
 			return val
 		case "untyped bool", "bool":
 			return constant.BoolVal(c.Value)
+		case "untyped string", "string":
+			return constant.StringVal(c.Value)
 		}
 		panic(fmt.Sprintf("unsupported const type: %v", c.Type()))
 	}
@@ -225,6 +227,11 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 // 处理函数调用
 func (f *Frame) executeCall(instr *ssa.Call) bool {
 	callee := instr.Common().Value
+	//先判断是不是内建函数
+	if builtin, ok := callee.(*ssa.Builtin); ok {
+		return f.executeBuiltin(instr, builtin)
+	}
+
 	fn, ok := callee.(*ssa.Function)
 	if !ok {
 		panic(fmt.Sprintf("暂时不支持调用非普通函数: %T", callee))
@@ -244,6 +251,47 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 	}
 
 	return false // 函数调用后继续执行当前帧
+}
+
+func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
+	// 1. 收集参数（复用原来的逻辑）
+	var args []Value
+	for _, arg := range instr.Common().Args {
+		args = append(args, f.get(arg))
+	}
+
+	switch builtin.Name() {
+	case "println":
+		// 模拟 println 的行为，用 Go 的 fmt.Println
+		fmt.Println(args...)
+		// 无返回值，直接返回
+
+	case "print":
+		fmt.Print(args...)
+
+	case "len":
+		// 模拟 len 的行为
+		if len(args) != 1 {
+			panic("len 只能接受 1 个参数")
+		}
+		// 因为 args[0] 是 interface{}，我们用 type switch 来算长度
+		switch v := args[0].(type) {
+		case string:
+			f.env[instr] = len(v)
+		case []interface{}: // 预留：如果以后支持了切片
+			f.env[instr] = len(v)
+		default:
+			panic(fmt.Sprintf("len 不支持的类型: %T", args[0]))
+		}
+
+	case "cap":
+		// 类似 len 的实现
+		f.env[instr] = 0 // 简化处理
+
+	default:
+		panic(fmt.Sprintf("不支持的 Builtin 函数: %s", builtin.Name()))
+	}
+	return false
 }
 
 // 后续不需要

@@ -163,7 +163,7 @@ func TestControlFlow(t *testing.T) {
 		println("sum(5) = ", result.(int))
 	}
 
-	//测试 函数调用
+	//测试4 函数调用
 	{
 		addAndmulFn := findFunctionByName(t, pkgs, "addAndMul")
 		result := RunFunction(addAndmulFn, 2, 5, 2)
@@ -172,6 +172,14 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("addAndmulFn(2,5,2) = %v, want 14", result)
 		}
 		println("addAndmulFn(2,5,2) = ", result.(int))
+	}
 
+	//测试5 内建函数的调用
+	{
+		builtinFn := findFunctionByName(t, pkgs, "testBuiltin")
+		gotBuiltin := RunFunction(builtinFn)
+		if gotBuiltin != 5 {
+			t.Fatalf("testBuiltin 失败: got %v, want 5", gotBuiltin)
+		}
 	}
 }

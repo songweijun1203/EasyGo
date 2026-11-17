@@ -28,3 +28,9 @@ func addAndMul(a, b int, factor int) int {
 	sum := a + b
 	return mul(sum, factor)
 }
+
+func testBuiltin() int {
+	println("Hello, SSA!")
+	s := "hello"
+	return len(s) // 应该返回 5
+}
