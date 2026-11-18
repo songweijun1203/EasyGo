@@ -182,4 +182,15 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("testBuiltin 失败: got %v, want 5", gotBuiltin)
 		}
 	}
+
+	//测试6 外部库调用
+	{
+		upperFn := findFunctionByName(t, pkgs, "testExternalUpper")
+		got := RunFunction(upperFn)
+
+		if got != "HELLO" {
+			t.Fatalf("testExternalUpper() = %v, want HELLO", got)
+		}
+		println("testExternalUpper() = ", got.(string))
+	}
 }

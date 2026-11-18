@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/constant"
 	"go/token"
+	"reflect"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -161,6 +162,18 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 	case *ssa.Call:
 		// 处理函数调用指令
 		return f.executeCall(instr)
+	case *ssa.Index:
+		x := f.get(instr.X)           // 被索引的对象（字符串或数组）
+		i := f.get(instr.Index).(int) // 索引下标
+		switch v := x.(type) {
+		case string:
+			f.env[instr] = v[i]
+		case []Value: // 如果你自己实现了切片
+			f.env[instr] = v[i]
+		default:
+			panic(fmt.Sprintf("不支持对 %T 进行索引", x))
+		}
+		return false
 	default:
 		// 处理其他类型的指令
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
@@ -243,6 +256,15 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 		args = append(args, f.get(arg))
 	}
 
+	//FFI边界分流
+	if _, isRegistered := nativeRegistry[fn.String()]; isRegistered {
+		return f.executeExternalCall(instr, fn, args)
+	}
+
+	if len(fn.Blocks) == 0 {
+		panic(fmt.Sprintf("未注册的外部函数: %s", fn.String()))
+	}
+
 	result := RunFunction(fn, args...) // 递归调用，创建一个新的Frame来执行被调用的函数
 
 	// 4. 存结果
@@ -291,6 +313,38 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 	default:
 		panic(fmt.Sprintf("不支持的 Builtin 函数: %s", builtin.Name()))
 	}
+	return false
+}
+
+func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Value) bool {
+	//1. 从注册表里查真实函数
+	nativeFunc, ok := nativeRegistry[fn.String()]
+	if !ok {
+		panic(fmt.Sprintf("未注册的外部函数：%s", fn.String()))
+	}
+
+	//2. 将解释器的[]value转换为反射需要的[]reflect.Value
+	var in []reflect.Value
+	for _, arg := range args {
+		// 注意：如果 arg 是 nil，reflect.ValueOf(nil) 会 panic，所以需要特殊处理
+		if arg == nil {
+			in = append(in, reflect.Zero(reflect.TypeOf((*interface{})(nil)).Elem()))
+		} else {
+			in = append(in, reflect.ValueOf(arg))
+		}
+	}
+
+	//反射调用真实go函数
+	out := nativeFunc.Call(in)
+
+	// 4. 将返回值塞回 SSA 的 env 中
+	if fn.Signature.Results().Len() == 1 {
+		f.env[instr] = out[0].Interface()
+	} else if fn.Signature.Results().Len() > 1 {
+		// 多返回值：ixgo 是包装成 Tuple，我们这里为了简化，先直接报错提醒
+		panic("暂不支持多返回值的外部函数（如 fmt.Println 返回的 n, err）")
+	}
+
 	return false
 }
 
