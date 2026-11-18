@@ -1,10 +1,12 @@
 package xinterp
 
+var g_count int
+
 func add(a, b int) int {
 	return a + b
 }
 
-// 测试 if
+// 测试
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -33,4 +35,10 @@ func testBuiltin() int {
 	println("Hello, SSA!")
 	s := "hello"
 	return len(s) // 应该返回 5
+}
+
+func printCount() {
+	//fmt.Printf("g_count: %d\n", g_count)
+	println("Hello, g_count!")
+	g_count++
 }

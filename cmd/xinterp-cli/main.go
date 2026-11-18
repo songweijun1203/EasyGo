@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"EasyGo/internal/xinterp" // 替换为你的真实 module 名
+	// 替换为你的真实 module 名
+	"EasyGo/internal/xinterp"
 
 	"go/types"
 
@@ -17,32 +18,35 @@ import (
 )
 
 func main() {
-	// 1. 准备临时沙盒目录（存放在系统临时目录中，避免污染项目）
+	// 1. 创建临时沙盒目录
 	tmpDir, err := os.MkdirTemp("", "xinterp-repl-*")
 	if err != nil {
-		panic(err)
+		fmt.Println("创建沙盒失败:", err)
+		return
 	}
-	defer os.RemoveAll(tmpDir) // 程序退出时清理沙盒
+	defer os.RemoveAll(tmpDir) // 退出时清理沙盒
 
-	// 2. 将 lib.go 的内容读出来，准备拼接
+	// 2. 写入 go.mod，让沙盒成为一个合法的 Go Module
+	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module repl-sandbox\n\ngo 1.20\n"), 0644)
+
+	// 3. 读取基础库代码 (lib.go)
 	libBytes, err := os.ReadFile("./cmd/xinterp-cli/lib.go")
 	if err != nil {
-		panic("找不到 lib.go，请在 cmd/xinterp-cli 目录下运行")
+		panic("找不到 lib.go，请在项目根目录下运行")
 	}
-	// 去掉原本的 package main，避免重复
+	// 去掉原本的 package main 声明，避免重复
 	libCode := strings.Replace(string(libBytes), "package main", "", 1)
 
-	// 3. 写入 go.mod，让沙盒成为一个合法的 Go Module
-	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module repl-sandbox\n\ngo 1.20\n"), 0644)
+	// 用来保存用户历史输入的语句（用于状态保留）
+	historyCode := ""
 
 	fmt.Println("=====================================")
 	fmt.Println("  Go SSA 解释器 REPL (输入 exit 退出)")
-	fmt.Println("  支持: add(1, 2), fib(10), testFFI()")
+	fmt.Println("  支持: add(1, 2), testFFI(), a := 10")
 	fmt.Println("=====================================")
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	// 4. 进入 REPL 循环
 	for {
 		fmt.Print(">>> ")
 		if !scanner.Scan() {
@@ -56,57 +60,100 @@ func main() {
 			continue
 		}
 
-		// 5. 动态拼接代码
-		// 把用户的输入包装在 __repl_exec__ 中，并用 println 打印结果
-		sourceCode := fmt.Sprintf(`package main
+		// 执行结果状态
+		execSuccess := false
+
+		// ==========================================
+		// 尝试一：作为“表达式”执行（自动打印返回值）
+		// ==========================================
+		codeExpr := fmt.Sprintf(`package main
+%s
 %s
 
 func __repl_exec__() {
 	println("=>", %s)
 }
-`, libCode, input)
+`, libCode, historyCode, input)
 
-		// 写入临时沙盒文件
 		tmpFile := filepath.Join(tmpDir, "main.go")
-		os.WriteFile(tmpFile, []byte(sourceCode), 0644)
+		os.WriteFile(tmpFile, []byte(codeExpr), 0644)
 
-		// 6. 加载并构建 SSA
-		cfg := &packages.Config{
-			Mode: packages.LoadAllSyntax,
-			Dir:  tmpDir, // 指向我们的沙盒目录
-		}
+		cfg := &packages.Config{Mode: packages.LoadAllSyntax, Dir: tmpDir}
 		pkgs, err := packages.Load(cfg, ".")
-		if err != nil || packages.PrintErrors(pkgs) > 0 {
-			fmt.Println("语法错误，请重新输入")
-			continue
-		}
 
-		prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
-		prog.Build()
+		// 如果加载没有错误，说明是合法的表达式
+		if err == nil && packages.PrintErrors(pkgs) == 0 {
+			runExec(pkgs)
+			execSuccess = true
+		} else {
+			// ==========================================
+			// 尝试二：作为“语句”执行（无返回值，或者是变量声明）
+			// ==========================================
+			codeStmt := fmt.Sprintf(`package main
+%s
+%s
 
-		// 7. 寻找执行入口 __repl_exec__
-		var execFn *ssa.Function
-		for _, pkg := range pkgs {
-			obj := pkg.Types.Scope().Lookup("__repl_exec__")
-			if obj != nil {
-				if fnObj, ok := obj.(*types.Func); ok {
-					execFn = prog.FuncValue(fnObj)
-					break
+func __repl_exec__() {
+	%s
+}
+`, libCode, historyCode, input)
+
+			os.WriteFile(tmpFile, []byte(codeStmt), 0644)
+			pkgs, err = packages.Load(cfg, ".")
+
+			if err == nil && packages.PrintErrors(pkgs) == 0 {
+				runExec(pkgs)
+				execSuccess = true
+
+				// 【状态保留】如果执行成功，且不是表达式，把它加到历史记录中
+				// 防止每次输入都被闭包在函数内，导致变量丢失
+				if strings.Contains(input, ":=") || strings.Contains(input, "=") {
+					// 简单粗暴地将 := 转换为包级别的 var 声明，防止编译报错
+					// 注意：这里只做了极简处理，真实场景需要 AST 解析
+					if strings.Contains(input, ":=") {
+						parts := strings.SplitN(input, ":=", 2)
+						varName := strings.TrimSpace(parts[0])
+						varVal := strings.TrimSpace(parts[1])
+						historyCode += fmt.Sprintf("\nvar %s = %s", varName, varVal)
+					} else {
+						// 如果是普通语句（如函数调用），直接追加到历史
+						// 但这里为了防止重复执行，暂时不追加非赋值语句
+					}
 				}
 			}
 		}
 
-		// 8. 执行并捕获 Panic，防止解释器崩溃退出 REPL
-		if execFn != nil {
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						fmt.Printf("执行崩溃: %v\n", r)
-					}
-				}()
-				// 调用你的解释器执行这个无参函数
-				xinterp.RunFunction(execFn)
-			}()
+		if !execSuccess {
+			fmt.Println("语法错误或执行失败，请重新输入")
 		}
+	}
+}
+
+// 运行生成的 __repl_exec__ 函数
+func runExec(pkgs []*packages.Package) {
+	prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
+	prog.Build()
+
+	var execFn *ssa.Function
+	for _, pkg := range pkgs {
+		obj := pkg.Types.Scope().Lookup("__repl_exec__")
+		if obj != nil {
+			if fnObj, ok := obj.(*types.Func); ok {
+				execFn = prog.FuncValue(fnObj)
+				break
+			}
+		}
+	}
+
+	if execFn != nil {
+		// 捕获 Panic，防止解释器崩溃
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Printf("\n[执行异常] %v\n", r)
+				}
+			}()
+			xinterp.RunFunction(execFn)
+		}()
 	}
 }

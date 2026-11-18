@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/constant"
 	"go/token"
+	"go/types"
 	"reflect"
 
 	"golang.org/x/tools/go/ssa"
@@ -13,6 +14,7 @@ type Value = interface{} // 简化：基本类型直接装
 
 // 这是一个用于解释执行的帧结构体，包含了当前函数、基本块、环境变量和局部变量等信息。
 type Frame struct {
+	interp    *Interp             //全局唯一
 	fn        *ssa.Function       // 当前正在执行的函数
 	block     *ssa.BasicBlock     // 当前正在执行的基本块
 	prevBlock *ssa.BasicBlock     // 上一个基本块，用于处理控制流跳转
@@ -66,40 +68,11 @@ func (f *Frame) run() {
 	}
 }
 
-// 统一的取值方法（处理常量、内存指针、普通值）
-func (f *Frame) get(v ssa.Value) Value {
-	if c, ok := v.(*ssa.Const); ok {
-		if c.Value == nil {
-			return nil
-		}
-		typeStr := c.Type().String()
-		switch typeStr {
-		case "untyped int", "int", "int64", "int32": // 注意这里可以列举你关心的整数类型
-			return int(c.Int64())
-		case "untyped float", "float64", "float32":
-			// c.Float64() 返回 float64
-			val, _ := constant.Float64Val(c.Value)
-			return val
-		case "untyped bool", "bool":
-			return constant.BoolVal(c.Value)
-		case "untyped string", "string":
-			return constant.StringVal(c.Value)
-		}
-		panic(fmt.Sprintf("unsupported const type: %v", c.Type()))
-	}
-
-	val := f.env[v]
-	if ptr, ok := val.(*Value); ok {
-		val = *ptr
-	}
-	return val
-}
-
 // 执行 Phi 指令，根据前一个基本块的值选择正确的分支。
 func (f *Frame) executePhi(phi *ssa.Phi) {
 	for i, pred := range phi.Block().Preds {
 		if pred == f.prevBlock {
-			f.env[phi] = f.get(phi.Edges[i])
+			f.env[phi] = f.getVarValue(phi.Edges[i])
 			return
 		}
 	}
@@ -111,15 +84,15 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 	switch instr := instr.(type) {
 	case *ssa.BinOp:
 		// 处理二元操作指令
-		x := f.get(instr.X)
-		y := f.get(instr.Y)
+		x := f.getVarValue(instr.X)
+		y := f.getVarValue(instr.Y)
 		// 统一调用计算函数，不管它是 int 还是 float
 		f.env[instr] = f.evalBinOp(instr.Op, x, y)
 		return false //普通指令，继续执行
 	case *ssa.Return:
 		// 处理返回指令
 		if len(instr.Results) > 0 {
-			f.result = f.get(instr.Results[0]) // 修复 2：直接读 env
+			f.result = f.getVarValue(instr.Results[0]) // 修复 2：直接读 env
 		}
 		f.block = nil // 置空，主循环退出
 		return true
@@ -130,7 +103,7 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		return true
 	case *ssa.If:
 		// If 指令根据条件跳转到两个后继块之一
-		cond := f.get(instr.Cond).(bool)
+		cond := f.getVarValue(instr.Cond).(bool)
 		if cond {
 			f.block = instr.Block().Succs[0] // 条件为真，跳转到第一个后继块
 		} else {
@@ -144,8 +117,9 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		return false
 	case *ssa.Store:
 		// 处理存储指令
-		addr := f.env[instr.Addr].(*Value) // 用 env 拿地址
-		val := f.get(instr.Val)
+		//addr := f.env[instr.Addr].(*Value) // 用 env 拿地址
+		addr := f.getVarAddr(instr.Addr)
+		val := f.getVarValue(instr.Val)
 		*addr = val
 		return false
 	case *ssa.UnOp:
@@ -153,8 +127,10 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		// 常见情况：取地址、取值、逻辑非等
 		switch instr.Op {
 		case token.MUL: // 取值操作
-			addr := f.env[instr.X].(*Value)
+			//addr := f.env[instr.X].(*Value)
+			addr := f.getVarAddr(instr.X)
 			f.env[instr] = *addr
+
 		default:
 			panic(fmt.Sprintf("unsupported UnOp: %v", instr.Op))
 		}
@@ -163,8 +139,8 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		// 处理函数调用指令
 		return f.executeCall(instr)
 	case *ssa.Index:
-		x := f.get(instr.X)           // 被索引的对象（字符串或数组）
-		i := f.get(instr.Index).(int) // 索引下标
+		x := f.getVarValue(instr.X)           // 被索引的对象（字符串或数组）
+		i := f.getVarValue(instr.Index).(int) // 索引下标
 		switch v := x.(type) {
 		case string:
 			f.env[instr] = v[i]
@@ -253,11 +229,20 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 	//收集参数
 	var args []Value
 	for _, arg := range instr.Common().Args {
-		args = append(args, f.get(arg))
+		args = append(args, f.getVarValue(arg))
 	}
 
 	//FFI边界分流
-	if _, isRegistered := nativeRegistry[fn.String()]; isRegistered {
+	var fnKey string
+	if fn.Pkg != nil && fn.Pkg.Pkg != nil {
+		fnKey = fn.Pkg.Pkg.Path() + "." + fn.Name()
+	} else {
+		fnKey = fn.String() // 兜底
+	}
+
+	fmt.Printf("DEBUG: fnKey=[%s], fn.String()=[%s]\n", fnKey, fn.String())
+
+	if _, isRegistered := nativeRegistry[fnKey]; isRegistered {
 		return f.executeExternalCall(instr, fn, args)
 	}
 
@@ -265,7 +250,7 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 		panic(fmt.Sprintf("未注册的外部函数: %s", fn.String()))
 	}
 
-	result := RunFunction(fn, args...) // 递归调用，创建一个新的Frame来执行被调用的函数
+	result := f.interp.RunFunction(fn, args...) // 递归调用，创建一个新的Frame来执行被调用的函数
 
 	// 4. 存结果
 	if fn.Signature.Results().Len() > 0 {
@@ -275,11 +260,12 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 	return false // 函数调用后继续执行当前帧
 }
 
+// 调用内建函数
 func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 	// 1. 收集参数（复用原来的逻辑）
 	var args []Value
 	for _, arg := range instr.Common().Args {
-		args = append(args, f.get(arg))
+		args = append(args, f.getVarValue(arg))
 	}
 
 	switch builtin.Name() {
@@ -316,6 +302,7 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 	return false
 }
 
+// 调用外部函数
 func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Value) bool {
 	//1. 从注册表里查真实函数
 	nativeFunc, ok := nativeRegistry[fn.String()]
@@ -346,6 +333,69 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 	}
 
 	return false
+}
+
+// 获取变量值
+func (f *Frame) getVarValue(v ssa.Value) Value {
+	if c, ok := v.(*ssa.Const); ok {
+		if c.Value == nil {
+			return nil
+		}
+		typeStr := c.Type().String()
+		switch typeStr {
+		case "untyped int", "int", "int64", "int32": // 注意这里可以列举你关心的整数类型
+			return int(c.Int64())
+		case "untyped float", "float64", "float32":
+			// c.Float64() 返回 float64
+			val, _ := constant.Float64Val(c.Value)
+			return val
+		case "untyped bool", "bool":
+			return constant.BoolVal(c.Value)
+		case "untyped string", "string":
+			return constant.StringVal(c.Value)
+		}
+		panic(fmt.Sprintf("unsupported const type: %v", c.Type()))
+	}
+
+	//是否是全局变量
+	if g, ok := v.(*ssa.Global); ok {
+		box := f.getGlobalAddr(g)
+		return *box
+	}
+
+	//局部变量
+	val := f.env[v]
+	if ptr, ok := val.(*Value); ok {
+		val = *ptr
+	}
+	return val
+}
+
+// 获取全局变量地址
+func (f *Frame) getGlobalAddr(g *ssa.Global) *Value {
+	if box, ok := f.interp.globals[g]; ok {
+		return box
+	}
+
+	//懒初始化：第一次访问，分配该类型的零值
+	elemType := g.Type().Underlying().(*types.Pointer).Elem()
+	z := zeroOf(elemType)
+	box := &z
+	f.interp.globals[g] = box // 存入解释器的全局表
+	return box
+}
+
+// 获取变量地址
+func (f *Frame) getVarAddr(v ssa.Value) *Value {
+	if g, ok := v.(*ssa.Global); ok {
+		return f.getGlobalAddr(g)
+	}
+
+	val := f.env[v]
+	if ptr, ok := val.(*Value); ok {
+		return ptr
+	}
+	panic(fmt.Sprintf("无法取地址: %T", v))
 }
 
 // 后续不需要

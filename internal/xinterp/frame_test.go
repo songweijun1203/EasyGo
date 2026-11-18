@@ -129,11 +129,14 @@ func findFunctionByName(t *testing.T, pkgs []*packages.Package, funcName string)
 
 func TestControlFlow(t *testing.T) {
 	pkgs := setupSSA(t)
+	interp := &Interp{
+		globals: make(map[*ssa.Global]*Value),
+	}
 
 	// 测试 1：add (线性)
 	{
 		addFn := findFunctionByName(t, pkgs, "add")
-		result := RunFunction(addFn, 10, 20)
+		result := interp.RunFunction(addFn, 10, 20)
 
 		if result != 30 {
 			t.Fatalf("add(10, 20) = %v, want 30", result)
@@ -144,7 +147,7 @@ func TestControlFlow(t *testing.T) {
 	// 测试 2：max (if)
 	{
 		maxFn := findFunctionByName(t, pkgs, "max")
-		result := RunFunction(maxFn, 10, 20)
+		result := interp.RunFunction(maxFn, 10, 20)
 
 		if result != 20 {
 			t.Fatalf("max(10, 20) = %v, want 20", result)
@@ -155,7 +158,7 @@ func TestControlFlow(t *testing.T) {
 	// 测试 3：sum (for)
 	{
 		sumFn := findFunctionByName(t, pkgs, "sum")
-		result := RunFunction(sumFn, 5)
+		result := interp.RunFunction(sumFn, 5)
 
 		if result != 15 {
 			t.Fatalf("sum(5) = %v, want 15", result)
@@ -166,7 +169,7 @@ func TestControlFlow(t *testing.T) {
 	//测试4 函数调用
 	{
 		addAndmulFn := findFunctionByName(t, pkgs, "addAndMul")
-		result := RunFunction(addAndmulFn, 2, 5, 2)
+		result := interp.RunFunction(addAndmulFn, 2, 5, 2)
 
 		if result != 14 {
 			t.Fatalf("addAndmulFn(2,5,2) = %v, want 14", result)
@@ -177,7 +180,7 @@ func TestControlFlow(t *testing.T) {
 	//测试5 内建函数的调用
 	{
 		builtinFn := findFunctionByName(t, pkgs, "testBuiltin")
-		gotBuiltin := RunFunction(builtinFn)
+		gotBuiltin := interp.RunFunction(builtinFn)
 		if gotBuiltin != 5 {
 			t.Fatalf("testBuiltin 失败: got %v, want 5", gotBuiltin)
 		}
@@ -186,11 +189,19 @@ func TestControlFlow(t *testing.T) {
 	//测试6 外部库调用
 	{
 		upperFn := findFunctionByName(t, pkgs, "testExternalUpper")
-		got := RunFunction(upperFn)
+		got := interp.RunFunction(upperFn)
 
 		if got != "HELLO" {
 			t.Fatalf("testExternalUpper() = %v, want HELLO", got)
 		}
 		println("testExternalUpper() = ", got.(string))
+	}
+
+	// 测试7 全局变量测试
+	{
+		printFn := findFunctionByName(t, pkgs, "printCount")
+		interp.RunFunction(printFn)
+		interp.RunFunction(printFn)
+		interp.RunFunction(printFn)
 	}
 }
