@@ -43,26 +43,34 @@ func RunFunction(fn *ssa.Function, args ...Value) Value {
 // 执行当前帧的指令，直到遇到返回指令或异常。
 func (f *Frame) run() {
 	for f.block != nil {
-		for _, instr := range f.block.Instrs {
-			if _, ok := instr.(*ssa.Phi); ok {
-				f.executePhi(instr.(*ssa.Phi)) // 处理 Phi 指令
-			} else {
-				break // 如果遇到非 Phi 指令，跳出循环，继续执行后续指令
+		//1 分类收集指令
+		var phis []*ssa.Phi
+		var otherInstrs []ssa.Instruction
+		{
+			for _, instr := range f.block.Instrs {
+				phi, ok := instr.(*ssa.Phi)
+				if ok {
+					phis = append(phis, phi)
+				} else {
+					otherInstrs = append(otherInstrs, instr)
+				}
 			}
 		}
 
-		for _, instr := range f.block.Instrs {
-			if _, ok := instr.(*ssa.Phi); ok {
-				continue // 跳过 Phi
-			}
+		//2 先执行开头的全部phi指令
+		f.executePhis(phis)
 
-			// 解释执行每条指令
-			oldBlock := f.block
-			jumped := f.execute(instr)
-			// 如果执行过程中遇到返回指令，退出循环
-			if jumped {
-				f.prevBlock = oldBlock // 更新上一个基本块
-				break                  //跳出当前基本块的指令循环，继续执行下一条指令
+		//3 执行别的指令
+		{
+			for _, instr := range otherInstrs {
+				// 解释执行每条指令
+				oldBlock := f.block
+				jumped := f.execute(instr)
+				// 如果执行过程中遇到返回指令，退出循环
+				if jumped {
+					f.prevBlock = oldBlock // 更新上一个基本块
+					break                  //跳出当前基本块的指令循环，继续执行下一条指令
+				}
 			}
 		}
 	}
@@ -77,6 +85,32 @@ func (f *Frame) executePhi(phi *ssa.Phi) {
 		}
 	}
 	panic("Phi 找不到对应的前驱块")
+}
+
+func (f *Frame) executePhis(phis []*ssa.Phi) {
+	var edgeValues []Value
+	for _, phi := range phis {
+		//找到从前驱块来的那条边对应的值
+		var val Value
+		found := false
+		for i, pred := range phi.Block().Preds {
+			if pred == f.prevBlock {
+				val = f.getVarValue(phi.Edges[i]) // 此时读到的绝对是旧值
+				found = true
+				break
+			}
+		}
+
+		if !found && f.prevBlock != nil {
+			// 初始进入 entry 块时 prevBlock 为 nil，跳过校验
+			panic("Phi 找不到对应的前驱块")
+		}
+		edgeValues = append(edgeValues, val)
+	}
+
+	for i, phi := range phis {
+		f.env[phi] = edgeValues[i]
+	}
 }
 
 // 执行单条指令，根据指令类型进行不同的处理。
@@ -339,7 +373,7 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 func (f *Frame) getVarValue(v ssa.Value) Value {
 	if c, ok := v.(*ssa.Const); ok {
 		if c.Value == nil {
-			return nil
+			return zeroOf(c.Type())
 		}
 		typeStr := c.Type().String()
 		switch typeStr {
@@ -379,8 +413,8 @@ func (f *Frame) getGlobalAddr(g *ssa.Global) *Value {
 
 	//懒初始化：第一次访问，分配该类型的零值
 	elemType := g.Type().Underlying().(*types.Pointer).Elem()
-	z := zeroOf(elemType)
-	box := &z
+	box := new(Value)
+	*box = zeroOf(elemType)
 	f.interp.globals[g] = box // 存入解释器的全局表
 	return box
 }
