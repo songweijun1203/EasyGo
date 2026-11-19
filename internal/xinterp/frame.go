@@ -32,7 +32,13 @@ func RunFunction(fn *ssa.Function, args ...Value) Value {
 
 	// 绑定参数到环境变量中
 	for i, param := range fn.Params {
-		f.env[param] = args[i]
+		box := new(Value)
+		if i < len(args) {
+			*box = args[i]
+		} else {
+			*box = zeroOf(param.Type())
+		}
+		f.env[param] = box // 存入的是 *Value
 	}
 
 	f.run() // 执行当前帧的指令
@@ -160,13 +166,10 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		return true
 	case *ssa.Alloc:
 		// 处理内存分配指令
-		var v Value
-		if ptr, ok := instr.Type().Underlying().(*types.Pointer); ok {
-			if array, ok := ptr.Elem().Underlying().(*types.Array); ok {
-				v = make([]Value, int(array.Len()))
-			}
-		}
-		f.env[instr] = &v
+		box := new(Value) //这儿语法有点不是很理解，new一个接口？？
+		elemType := instr.Type().Underlying().(*types.Pointer).Elem()
+		*box = zeroOf(elemType)
+		f.env[instr] = box
 		return false
 	case *ssa.Store:
 		// 处理存储指令
@@ -190,10 +193,14 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		switch values := collection.(type) {
 		case []Value:
 			f.env[instr] = &values[index]
+		case []*Value: // 【新增】处理 Alloc 分配的数组
+			// values[index] 本身已经是 *Value 了，直接存入 env 即可
+			f.env[instr] = values[index]
 		default:
 			panic(fmt.Sprintf("不支持对 %T 取元素地址", collection))
 		}
 		return false
+
 	case *ssa.Slice:
 		collection := f.getVarValue(instr.X)
 		low, high := 0, -1
@@ -209,6 +216,11 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 				high = len(values)
 			}
 			f.env[instr] = values[low:high]
+		case []*Value: // 【新增】处理数组转切片
+			if high < 0 {
+				high = len(values)
+			}
+			f.env[instr] = values[low:high] // 结果仍然是 []*Value，完美对接外部调用
 		case string:
 			if high < 0 {
 				high = len(values)
@@ -240,8 +252,8 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		switch v := x.(type) {
 		case string:
 			f.env[instr] = v[i]
-		case []Value: // 如果你自己实现了切片
-			f.env[instr] = v[i]
+		case []*Value: // 如果你自己实现了切片
+			f.env[instr] = *v[i]
 		default:
 			panic(fmt.Sprintf("不支持对 %T 进行索引", x))
 		}
@@ -409,8 +421,14 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 	//2. 将解释器的[]value转换为反射需要的[]reflect.Value
 	var in []reflect.Value
 	for _, arg := range args {
-		// 注意：如果 arg 是 nil，reflect.ValueOf(nil) 会 panic，所以需要特殊处理
-		if arg == nil {
+		// 【新增】如果参数是我们模拟的变参切片 ([]*Value)，解包成真实的 []interface{}
+		if slice, ok := arg.([]*Value); ok {
+			realSlice := make([]interface{}, len(slice))
+			for i, ptr := range slice {
+				realSlice[i] = *ptr // 解引用，拿出真实的值
+			}
+			in = append(in, reflect.ValueOf(realSlice))
+		} else if arg == nil {
 			in = append(in, reflect.Zero(reflect.TypeOf((*interface{})(nil)).Elem()))
 		} else {
 			in = append(in, reflect.ValueOf(arg))
@@ -419,18 +437,6 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 
 	// 可变参数函数在 SSA 中通常以一个切片传入，反射调用前展开它。
 	var out []reflect.Value
-	if fn.Signature.Variadic() && len(args) > 0 {
-		if values, ok := args[len(args)-1].([]Value); ok {
-			in = in[:len(in)-1]
-			for _, value := range values {
-				if value == nil {
-					in = append(in, reflect.Zero(reflect.TypeOf((*interface{})(nil)).Elem()))
-				} else {
-					in = append(in, reflect.ValueOf(value))
-				}
-			}
-		}
-	}
 	out = nativeFunc.Call(in)
 
 	// 4. 将返回值塞回 SSA 的 env 中

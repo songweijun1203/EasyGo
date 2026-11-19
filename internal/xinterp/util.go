@@ -24,8 +24,8 @@ func zeroOf(t types.Type) Value {
 			return ""
 		}
 
-	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Signature, *types.Interface:
-		// 引用类型（指针、切片、map、通道、函数、接口）的零值统一是 nil
+	case *types.Pointer, *types.Map, *types.Chan, *types.Signature, *types.Interface:
+		// 引用类型（指针、map、通道、函数、接口）的零值统一是 nil
 		return nil
 
 	case *types.Struct:
@@ -34,9 +34,20 @@ func zeroOf(t types.Type) Value {
 		panic(fmt.Sprintf("玩具解释器暂不支持结构体零值分配: %v", t))
 
 	case *types.Array:
-		panic(fmt.Sprintf("玩具解释器暂不支持数组零值分配: %v", t))
+		//panic(fmt.Sprintf("玩具解释器暂不支持数组零值分配: %v", t))
+		arr := make([]*Value, u.Len())
+		for i := 0; i < int(u.Len()); i++ {
+			box := new(Value)
+			*box = zeroOf(u.Elem())
+			arr[i] = box
+		}
+		return arr
+	case *types.Slice:
+		// 切片的零值是 nil
+		return [](*Value)(nil)
+	default:
+		// 兜底：如果遇到无法识别的类型，返回 nil
+		return nil
 	}
-
-	// 兜底：如果遇到无法识别的类型，返回 nil
 	return nil
 }
