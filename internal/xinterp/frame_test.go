@@ -204,4 +204,16 @@ func TestControlFlow(t *testing.T) {
 		interp.RunFunction(printFn)
 		interp.RunFunction(printFn)
 	}
+
+	// 测试8 多返回值
+	{
+		Fn := findFunctionByName(t, pkgs, "testSwap")
+		interp.RunFunction(Fn)
+	}
+
+	// 测试9 print
+	{
+		Fn := findFunctionByName(t, pkgs, "myPrintIn")
+		interp.RunFunction(Fn)
+	}
 }

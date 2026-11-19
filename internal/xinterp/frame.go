@@ -125,11 +125,25 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		return false //普通指令，继续执行
 	case *ssa.Return:
 		// 处理返回指令
-		if len(instr.Results) > 0 {
+		if len(instr.Results) == 1 {
 			f.result = f.getVarValue(instr.Results[0]) // 修复 2：直接读 env
+		} else if len(instr.Results) > 1 {
+			tuple := make([]Value, len(instr.Results))
+			for i, r := range instr.Results {
+				tuple[i] = f.getVarValue(r)
+			}
+			f.result = tuple
 		}
 		f.block = nil // 置空，主循环退出
 		return true
+	case *ssa.Extract:
+		tupleVal := f.getVarValue(instr.Tuple)
+		if tuple, ok := tupleVal.([]Value); ok {
+			f.env[instr] = tuple[instr.Index]
+		} else {
+			panic(fmt.Sprintf("Extract 操作数不是 Tuple ([]Value), 而是 %T", tupleVal))
+		}
+		return false
 		// ====== 新增的控制流指令 ======
 	case *ssa.Jump:
 		// Jump 指令无条件跳转到第一个后继块
@@ -147,6 +161,11 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 	case *ssa.Alloc:
 		// 处理内存分配指令
 		var v Value
+		if ptr, ok := instr.Type().Underlying().(*types.Pointer); ok {
+			if array, ok := ptr.Elem().Underlying().(*types.Array); ok {
+				v = make([]Value, int(array.Len()))
+			}
+		}
 		f.env[instr] = &v
 		return false
 	case *ssa.Store:
@@ -155,6 +174,49 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		addr := f.getVarAddr(instr.Addr)
 		val := f.getVarValue(instr.Val)
 		*addr = val
+		return false
+	case *ssa.MakeInterface:
+		// 接口值在解释器中直接使用其底层值表示。
+		f.env[instr] = f.getVarValue(instr.X)
+		return false
+	case *ssa.MakeSlice:
+		length := f.getVarValue(instr.Len).(int)
+		capacity := f.getVarValue(instr.Cap).(int)
+		f.env[instr] = make([]Value, length, capacity)
+		return false
+	case *ssa.IndexAddr:
+		index := f.getVarValue(instr.Index).(int)
+		collection := f.getVarValue(instr.X)
+		switch values := collection.(type) {
+		case []Value:
+			f.env[instr] = &values[index]
+		default:
+			panic(fmt.Sprintf("不支持对 %T 取元素地址", collection))
+		}
+		return false
+	case *ssa.Slice:
+		collection := f.getVarValue(instr.X)
+		low, high := 0, -1
+		if instr.Low != nil {
+			low = f.getVarValue(instr.Low).(int)
+		}
+		if instr.High != nil {
+			high = f.getVarValue(instr.High).(int)
+		}
+		switch values := collection.(type) {
+		case []Value:
+			if high < 0 {
+				high = len(values)
+			}
+			f.env[instr] = values[low:high]
+		case string:
+			if high < 0 {
+				high = len(values)
+			}
+			f.env[instr] = values[low:high]
+		default:
+			panic(fmt.Sprintf("不支持对 %T 进行切片", collection))
+		}
 		return false
 	case *ssa.UnOp:
 		// 处理一元操作指令
@@ -355,15 +417,33 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 		}
 	}
 
-	//反射调用真实go函数
-	out := nativeFunc.Call(in)
+	// 可变参数函数在 SSA 中通常以一个切片传入，反射调用前展开它。
+	var out []reflect.Value
+	if fn.Signature.Variadic() && len(args) > 0 {
+		if values, ok := args[len(args)-1].([]Value); ok {
+			in = in[:len(in)-1]
+			for _, value := range values {
+				if value == nil {
+					in = append(in, reflect.Zero(reflect.TypeOf((*interface{})(nil)).Elem()))
+				} else {
+					in = append(in, reflect.ValueOf(value))
+				}
+			}
+		}
+	}
+	out = nativeFunc.Call(in)
 
 	// 4. 将返回值塞回 SSA 的 env 中
 	if fn.Signature.Results().Len() == 1 {
 		f.env[instr] = out[0].Interface()
 	} else if fn.Signature.Results().Len() > 1 {
 		// 多返回值：ixgo 是包装成 Tuple，我们这里为了简化，先直接报错提醒
-		panic("暂不支持多返回值的外部函数（如 fmt.Println 返回的 n, err）")
+		//panic("暂不支持多返回值的外部函数（如 fmt.Println 返回的 n, err）")
+		tuple := make([]Value, len(out))
+		for i, v := range out {
+			tuple[i] = v.Interface()
+		}
+		f.env[instr] = tuple
 	}
 
 	return false
