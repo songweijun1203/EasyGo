@@ -108,7 +108,7 @@ func testAppend() {
 	fmt.Println("Final len:", len(s)) // 期望：8
 }
 
-func printSclice() {
+func printSlice() {
 	s := []int{1, 2, 3}
 	fmt.Println(s)
 }

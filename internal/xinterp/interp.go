@@ -8,20 +8,14 @@ type Interp struct {
 
 func (i *Interp) RunFunction(fn *ssa.Function, args ...Value) Value {
 	f := &Frame{
-		interp: i,
-		fn:     fn,
-		block:  fn.Blocks[0],
-		env:    make(map[ssa.Value]Value),
+		interp:     i,
+		fn:         fn,
+		block:      fn.Blocks[0],
+		env_values: make(map[ssa.Value]Value),
+		env_slots:  make(map[ssa.Value]*Cell),
 	}
 
-	// 绑定参数到环境变量中
-	if false {
-		for i, param := range fn.Params {
-			f.env[param] = args[i]
-		}
-	}
-
-	//如果函数内部，需要对参数取地址的话，此处直接存储值，没法取地址，会出问题
+	// 当前实现把参数统一放入槽位表，保证参数被取地址时仍然可写。
 	for i, param := range fn.Params {
 		box := new(Cell)
 		if i < len(args) {
@@ -29,7 +23,7 @@ func (i *Interp) RunFunction(fn *ssa.Function, args ...Value) Value {
 		} else {
 			box.Value = zeroOf(param.Type()) // 防止参数个数不匹配时的兜底
 		}
-		f.env[param] = box
+		f.env_slots[param] = box
 	}
 
 	f.run() // 执行当前帧的指令
