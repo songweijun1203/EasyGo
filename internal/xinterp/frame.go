@@ -491,7 +491,9 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 		switch v := args[0].(type) {
 		case string:
 			f.env[instr] = len(v)
-		case []interface{}: // 预留：如果以后支持了切片
+		case []Value:
+			f.env[instr] = len(v)
+		case []*Value:
 			f.env[instr] = len(v)
 		default:
 			panic(fmt.Sprintf("len 不支持的类型: %T", args[0]))
@@ -500,6 +502,56 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 	case "cap":
 		// 类似 len 的实现
 		f.env[instr] = 0 // 简化处理
+	case "append":
+		//append一般两种用法
+		//append(s,1,2,3)
+		//t :=int{4,5}
+		//s=append(s,t...)
+		if len(args) < 1 {
+			panic("append 至少需要一个参数（切片本身）")
+		}
+		slice := args[0]
+		isSpread := false
+		if len(args) == 2 {
+			switch args[1].(type) {
+			case []Value, []*Value:
+				isSpread = true
+			}
+		}
+
+		switch s := slice.(type) {
+		case []Value:
+			if isSpread {
+				if t, ok := args[1].([]Value); ok {
+					f.env[instr] = append(s, t...)
+				} else {
+					panic("append 展开调用：第二个参数必须是 []Value 切片")
+				}
+			} else {
+				f.env[instr] = append(s, args[1:]...)
+			}
+		case []*Value:
+			if isSpread {
+				if t, ok := args[1].([]*Value); ok {
+					f.env[instr] = append(s, t...)
+				} else {
+					panic("append 展开调用：第二个参数必须是 []*Value 切片")
+				}
+			} else {
+				// 普通追加：把每个参数包进 *Value 盒子
+				newElems := make([]*Value, len(args)-1)
+				for i, arg := range args[1:] {
+					box := new(Value)
+					*box = arg
+					newElems[i] = box
+				}
+				f.env[instr] = append(s, newElems...)
+			}
+		case nil:
+			f.env[instr] = append([]Value(nil), args[1:]...)
+		default:
+			panic(fmt.Sprintf("append 不支持的切片类型: %T", slice))
+		}
 
 	default:
 		panic(fmt.Sprintf("不支持的 Builtin 函数: %s", builtin.Name()))

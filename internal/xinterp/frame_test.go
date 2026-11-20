@@ -222,4 +222,15 @@ func TestControlFlow(t *testing.T) {
 		Fn := findFunctionByName(t, pkgs, "testStruct")
 		interp.RunFunction(Fn)
 	}
+
+	// 测试 11：append
+	{
+		Fn := findFunctionByName(t, pkgs, "testAppend")
+		interp.RunFunction(Fn)
+	}
+
+	{
+		Fn := findFunctionByName(t, pkgs, "printSclice")
+		interp.RunFunction(Fn)
+	}
 }

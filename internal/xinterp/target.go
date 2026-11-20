@@ -87,3 +87,28 @@ func testStruct() {
 func updateAge(ptr *Person) {
 	ptr.Age = 30
 }
+
+func testAppend() {
+	// 1. 普通追加
+	s := []int{1, 2, 3}
+	s = append(s, 4, 5)
+	fmt.Println("After append:", s) // 期望：[1 2 3 4 5]
+
+	// 2. 展开追加
+	t := []int{6, 7, 8}
+	s = append(s, t...)
+	fmt.Println("After spread append:", s) // 期望：[1 2 3 4 5 6 7 8]
+
+	// 3. 对 nil 切片 append
+	var nilSlice []int
+	nilSlice = append(nilSlice, 100)
+	fmt.Println("Nil slice append:", nilSlice) // 期望：[100]
+
+	// 4. 验证 len
+	fmt.Println("Final len:", len(s)) // 期望：8
+}
+
+func printSclice() {
+	s := []int{1, 2, 3}
+	fmt.Println(s)
+}
