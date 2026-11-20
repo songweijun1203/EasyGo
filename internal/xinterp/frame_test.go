@@ -130,7 +130,7 @@ func findFunctionByName(t *testing.T, pkgs []*packages.Package, funcName string)
 func TestControlFlow(t *testing.T) {
 	pkgs := setupSSA(t)
 	interp := &Interp{
-		globals: make(map[*ssa.Global]*Value),
+		globals: make(map[*ssa.Global]*Cell),
 	}
 
 	// 测试 1：add (线性)

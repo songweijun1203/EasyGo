@@ -29,29 +29,22 @@ func zeroOf(t types.Type) Value {
 		return nil
 
 	case *types.Struct:
-		//结构体的零值用一个map表达，key是字段名，value是字段值的地址
-		st := make(map[string]*Value)
+		// 结构体的零值用字段槽位保存，字段名只存在于解释器内部。
+		st := &RuntimeStruct{Fields: make(map[string]*Cell)}
 		for i := 0; i < u.NumFields(); i++ {
 			field := u.Field(i)
-			box := new(Value)
-			//递归调用自身
-			*box = zeroOf(field.Type())
-			st[field.Name()] = box
+			st.Fields[field.Name()] = &Cell{Value: zeroOf(field.Type())}
 		}
 		return st
 
 	case *types.Array:
-		//panic(fmt.Sprintf("玩具解释器暂不支持数组零值分配: %v", t))
-		arr := make([]*Value, u.Len())
+		arr := &RuntimeSlice{ElemType: u.Elem(), Capacity: int(u.Len())}
 		for i := 0; i < int(u.Len()); i++ {
-			box := new(Value)
-			*box = zeroOf(u.Elem())
-			arr[i] = box
+			arr.Elements = append(arr.Elements, &Cell{Value: zeroOf(u.Elem())})
 		}
 		return arr
 	case *types.Slice:
-		// 切片的零值是 nil
-		return [](*Value)(nil)
+		return &RuntimeSlice{ElemType: u.Elem(), Nil: true}
 	default:
 		// 兜底：如果遇到无法识别的类型，返回 nil
 		return nil
@@ -62,6 +55,9 @@ func zeroOf(t types.Type) Value {
 func isNil(v Value) bool {
 	if v == nil {
 		return true
+	}
+	if slice, ok := v.(*RuntimeSlice); ok {
+		return slice == nil || slice.Nil
 	}
 	// 使用 reflect 检查引用类型是否为 nil
 	rv := reflect.ValueOf(v)
