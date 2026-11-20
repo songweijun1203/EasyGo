@@ -18,6 +18,7 @@ func RegisterNative(name string, fn interface{}) {
 func init() {
 	RegisterNative("fmt.Println", fmt.Println)
 	RegisterNative("strings.ToUpper", strings.ToUpper)
+	RegisterNative("fmt.Printf", fmt.Printf)
 }
 
 // 测试外部库：定长参数，单返回值

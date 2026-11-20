@@ -1,8 +1,8 @@
 package xinterp
 
 import (
-	"fmt"
 	"go/types"
+	"reflect"
 )
 
 func zeroOf(t types.Type) Value {
@@ -29,9 +29,16 @@ func zeroOf(t types.Type) Value {
 		return nil
 
 	case *types.Struct:
-		// 如果你的玩具解释器还没实现结构体，这里先 panic 阻断
-		// 如果实现了，这里需要构造一个包含所有字段零值的结构体 map/slice
-		panic(fmt.Sprintf("玩具解释器暂不支持结构体零值分配: %v", t))
+		//结构体的零值用一个map表达，key是字段名，value是字段值的地址
+		st := make(map[string]*Value)
+		for i := 0; i < u.NumFields(); i++ {
+			field := u.Field(i)
+			box := new(Value)
+			//递归调用自身
+			*box = zeroOf(field.Type())
+			st[field.Name()] = box
+		}
+		return st
 
 	case *types.Array:
 		//panic(fmt.Sprintf("玩具解释器暂不支持数组零值分配: %v", t))
@@ -50,4 +57,17 @@ func zeroOf(t types.Type) Value {
 		return nil
 	}
 	return nil
+}
+
+func isNil(v Value) bool {
+	if v == nil {
+		return true
+	}
+	// 使用 reflect 检查引用类型是否为 nil
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+		return rv.IsNil()
+	}
+	return false
 }

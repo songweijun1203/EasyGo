@@ -124,11 +124,13 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 	switch instr := instr.(type) {
 	case *ssa.BinOp:
 		// 处理二元操作指令
-		x := f.getVarValue(instr.X)
-		y := f.getVarValue(instr.Y)
-		// 统一调用计算函数，不管它是 int 还是 float
-		f.env[instr] = f.evalBinOp(instr.Op, x, y)
+		f.env[instr] = f.evalBinOp(instr.Op, f.getVarValue(instr.X), f.getVarValue(instr.Y))
 		return false //普通指令，继续执行
+	case *ssa.UnOp:
+		// 处理一元操作指令
+		// 常见情况：取地址、取值、逻辑非等
+		f.env[instr] = f.evealUnop(instr)
+		return false
 	case *ssa.Return:
 		// 处理返回指令
 		if len(instr.Results) == 1 {
@@ -230,19 +232,6 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 			panic(fmt.Sprintf("不支持对 %T 进行切片", collection))
 		}
 		return false
-	case *ssa.UnOp:
-		// 处理一元操作指令
-		// 常见情况：取地址、取值、逻辑非等
-		switch instr.Op {
-		case token.MUL: // 取值操作
-			//addr := f.env[instr.X].(*Value)
-			addr := f.getVarAddr(instr.X)
-			f.env[instr] = *addr
-
-		default:
-			panic(fmt.Sprintf("unsupported UnOp: %v", instr.Op))
-		}
-		return false
 	case *ssa.Call:
 		// 处理函数调用指令
 		return f.executeCall(instr)
@@ -258,6 +247,61 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 			panic(fmt.Sprintf("不支持对 %T 进行索引", x))
 		}
 		return false
+	case *ssa.Convert:
+		val := f.getVarValue(instr.X)
+		targetType := instr.Type().Underlying().(*types.Basic)
+
+		switch targetType.Info() {
+		case types.IsInteger:
+			switch v := val.(type) {
+			case int:
+				f.env[instr] = v
+			case float64:
+				f.env[instr] = int(v) // float 转 int，截断小数
+			default:
+				panic(fmt.Sprintf("cannot convert %T to int", val))
+			}
+		case types.IsFloat:
+			switch v := val.(type) {
+			case int:
+				f.env[instr] = float64(v) // int 转 float
+			case float64:
+				f.env[instr] = v
+			default:
+				panic(fmt.Sprintf("cannot convert %T to float64", val))
+			}
+		default:
+			panic(fmt.Sprintf("unsupported Convert target type: %v", targetType))
+		}
+		return false
+	case *ssa.Field: //结构体字段的值
+		// 1. 获取结构体值（也就是我们的 map）
+		structVal := f.getVarValue(instr.X)
+		m, ok := structVal.(map[string]*Value)
+		if !ok {
+			panic(fmt.Sprintf("Field 操作数不是结构体 map, 而是 %T", structVal))
+		}
+		structType := instr.X.Type().Underlying().(*types.Struct)
+		fieldName := structType.Field(instr.Field).Name()
+		box := m[fieldName]
+		f.env[instr] = *box
+		return false
+	case *ssa.FieldAddr: //结构体字段的地址
+		// 1. 获取结构体指针的地址
+		addr := f.getVarAddr(instr.X)
+		m, ok := (*addr).(map[string]*Value) //解引用获取map
+		if !ok {
+			panic(fmt.Sprintf("FieldAddr 操作数解引用后不是结构体 map, 而是 %T", *addr))
+		}
+		// 3. 通过索引获取字段名 (注意这里多了一层 *types.Pointer)
+		ptrType := instr.X.Type().Underlying().(*types.Pointer)
+		structType := ptrType.Elem().Underlying().(*types.Struct)
+		fieldName := structType.Field(instr.Field).Name()
+
+		// 4. 核心魔法：m[fieldName] 本身就是一个 *Value（字段的地址）！
+		// 我们直接把这个地址存入 env，后续的 Store 或 UnOp 就能直接操作它了。
+		f.env[instr] = m[fieldName]
+		return false
 	default:
 		// 处理其他类型的指令
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
@@ -266,6 +310,16 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 
 // 专门处理二元运算
 func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
+	if op == token.EQL || op == token.NEQ {
+		if isNil(x) || isNil(y) {
+			// 如果两边都是 nil，或者一边是 nil 一边不是
+			res := (isNil(x) && isNil(y))
+			if op == token.NEQ {
+				res = !res
+			}
+			return res
+		}
+	}
 	switch xv := x.(type) {
 	case int:
 		yv := y.(int)
@@ -317,8 +371,51 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 		case token.GEQ:
 			return xv >= yv
 		}
+	case string:
+		yv := y.(string)
+		switch op {
+		case token.ADD:
+			return xv + yv
+		case token.EQL:
+			return xv == yv
+		case token.NEQ:
+			return xv != yv
+		case token.LSS:
+			return xv < yv
+		case token.LEQ:
+			return xv <= yv
+		case token.GTR:
+			return xv > yv
+		case token.GEQ:
+			return xv >= yv
+		}
 	}
+
 	panic(fmt.Sprintf("unsupported types for op %v: %T, %T", op, x, y))
+}
+
+// 专门处理一元运算
+func (f *Frame) evealUnop(instr *ssa.UnOp) Value {
+	switch instr.Op {
+	case token.MUL: // 取值操作
+		addr := f.getVarAddr(instr.X)
+		return *addr
+	case token.NOT: //逻辑非
+		return !f.getVarValue(instr.X).(bool)
+	case token.SUB: //取负
+		x := f.getVarValue(instr.X)
+		switch v := x.(type) {
+		case int:
+			return -v
+		case float64:
+			return -v
+		default:
+			panic(fmt.Sprintf("unsupported type for SUB: %T", x))
+		}
+	case token.XOR: //按位取反
+		return ^f.getVarValue(instr.X).(int)
+	}
+	panic(fmt.Sprintf("unsupported UnOp: %v", instr.Op))
 }
 
 // 处理函数调用

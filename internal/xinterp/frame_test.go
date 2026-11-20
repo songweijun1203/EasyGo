@@ -216,4 +216,10 @@ func TestControlFlow(t *testing.T) {
 		Fn := findFunctionByName(t, pkgs, "myPrintIn")
 		interp.RunFunction(Fn)
 	}
+
+	// 测试10 struct测试
+	{
+		Fn := findFunctionByName(t, pkgs, "testStruct")
+		interp.RunFunction(Fn)
+	}
 }

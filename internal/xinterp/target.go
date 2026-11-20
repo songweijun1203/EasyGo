@@ -63,3 +63,27 @@ func getTwoValue() (int, int) {
 func myPrintIn() {
 	fmt.Println(10)
 }
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func testStruct() {
+	// 1. 结构体初始化 (SSA 会调用 Alloc 造一个 map)
+	var p Person
+
+	// 2. 字段赋值 (SSA 会生成 FieldAddr 获取地址，然后 Store 写入)
+	p.Name = "Alice"
+	p.Age = 25
+
+	// 3. 字段读取 (SSA 会生成 Field 读取值)
+	fmt.Printf("Name: %s, Age: %d\n", p.Name, p.Age)
+
+	// 4. 传递结构体指针 (SSA 会传递指向 map 的指针)
+	updateAge(&p)
+	fmt.Println("Updated Age:", p.Age)
+}
+func updateAge(ptr *Person) {
+	ptr.Age = 30
+}
