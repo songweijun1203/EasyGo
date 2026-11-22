@@ -147,4 +147,13 @@ func TestControlFlow(t *testing.T) {
 		Fn := findFunctionByName(t, pkgs, "printSlice")
 		interp.RunFunction(Fn)
 	}
+
+	// 测试 12：map 写入、更新和读取
+	{
+		fn := findFunctionByName(t, pkgs, "testMapUpdate")
+		result := interp.RunFunction(fn)
+		if result != 42 {
+			t.Fatalf("testMapUpdate() = %v, want 42", result)
+		}
+	}
 }

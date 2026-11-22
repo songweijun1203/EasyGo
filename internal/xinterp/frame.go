@@ -10,6 +10,18 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
+/*
+定义 RuntimeMap 和 MapKey
+修改 zeroOf，让 map 零值保留 key/value 类型
+实现 ssa.MakeMap
+实现 ssa.MapUpdate
+实现 ssa.Lookup
+扩展 Extract，确认 tuple 读取正常
+扩展 len 支持 RuntimeMap
+实现 delete
+扩展 nativeValue 支持 map
+最后再考虑 Range 和 Next
+*/
 type Value = interface{} // 简化：基本类型直接装
 
 // 这是一个用于解释执行的帧结构体，包含了当前函数、基本块、环境变量和局部变量等信息。
@@ -115,7 +127,7 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		}
 		f.block = nil // 置空，主循环退出
 		return true
-	case *ssa.Extract:
+	case *ssa.Extract: //处理多返回值的拆解
 		tupleVal := f.getVarValue(instr.Tuple)
 		if tuple, ok := tupleVal.([]Value); ok {
 			f.env_values[instr] = tuple[instr.Index]
@@ -271,6 +283,91 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		structType := ptrType.Elem().Underlying().(*types.Struct)
 		fieldName := structType.Field(instr.Field).Name()
 		f.env_slots[instr] = st.Fields[fieldName]
+		return false
+	case *ssa.MakeMap:
+		//env_values[instr] = &RuntimeMap{...}
+		mapType, ok := instr.Type().Underlying().(*types.Map)
+		if !ok {
+			panic(fmt.Sprintf("MakeMap 类型不是 map: %v", instr.Type()))
+		}
+		reserve := 0
+		if instr.Reserve != nil {
+			reserve = f.getVarValue(instr.Reserve).(int)
+			if reserve < 0 {
+				reserve = 0
+			}
+		}
+
+		runtimeMap := &RuntimeMap{
+			KeyType:  mapType.Key(),
+			ElemType: mapType.Elem(),
+			Entries:  make(map[MapKey]*Cell, reserve),
+			Nil:      false,
+		}
+		f.env_values[instr] = runtimeMap
+		return false
+	case *ssa.Lookup:
+		mapVal := f.getVarValue(instr.X)
+		keyVal := f.getVarValue(instr.Index)
+		// 2. 类型断言，确保它是我们的 RuntimeMap
+		rm, ok := mapVal.(*RuntimeMap)
+		if !ok {
+			panic(fmt.Sprintf("Lookup 操作数不是 *RuntimeMap, 而是 %T", mapVal))
+		}
+		// 3. 处理 nil map 的情况
+		if rm == nil || rm.Nil {
+			if instr.CommaOk {
+				// CommaOk 为 true 时，instr.Type() 是 *types.Tuple，第 0 个元素是 value 类型
+				elemType := instr.Type().(*types.Tuple).At(0).Type()
+				f.env_values[instr] = []Value{zeroOf(elemType), false}
+			} else {
+				// 直接返回 value 类型的零值
+				f.env_values[instr] = zeroOf(instr.Type())
+			}
+			return false
+		}
+
+		mk := makeMapKey(rm, keyVal)
+		cell, found := rm.Entries[mk]
+		// 5. 根据 CommaOk 标志返回不同的结果
+		if instr.CommaOk {
+			if found {
+				// 找到了：返回 (值, true)
+				f.env_values[instr] = []Value{readCell(cell), true}
+			} else {
+				// 没找到：返回 (零值, false)
+				elemType := instr.Type().(*types.Tuple).At(0).Type()
+				f.env_values[instr] = []Value{zeroOf(elemType), false}
+			}
+		} else {
+			if found {
+				// 找到了：直接返回值
+				f.env_values[instr] = readCell(cell)
+			} else {
+				// 没找到：返回零值
+				f.env_values[instr] = zeroOf(instr.Type())
+			}
+		}
+		return false
+	case *ssa.MapUpdate:
+		mapVal := f.getVarValue(instr.Map)
+		keyVal := f.getVarValue(instr.Key)
+		valVal := f.getVarValue(instr.Value)
+
+		rm, ok := mapVal.(*RuntimeMap)
+		if !ok {
+			panic(fmt.Sprintf("MapUpdate 操作数不是 *RuntimeMap, 而是 %T", mapVal))
+		}
+
+		// Go 语义：对 nil map 写入会 panic
+		if rm == nil || rm.Nil {
+			panic("assignment to entry in nil map")
+		}
+
+		mk := makeMapKey(rm, keyVal)
+
+		// 写入或更新 Cell
+		rm.Entries[mk] = &Cell{Value: valVal}
 		return false
 	default:
 		// 处理其他类型的指令
@@ -463,6 +560,8 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 			f.env_values[instr] = len(v)
 		case *RuntimeSlice:
 			f.env_values[instr] = v.Len()
+		case *RuntimeMap:
+			f.env_values[instr] = v.Len()
 		default:
 			panic(fmt.Sprintf("len 不支持的类型: %T", args[0]))
 		}
@@ -511,7 +610,25 @@ func (f *Frame) executeBuiltin(instr *ssa.Call, builtin *ssa.Builtin) bool {
 		if _, ok := f.env_values[instr].(*RuntimeSlice); !ok {
 			panic(fmt.Sprintf("append 不支持的切片类型: %T", slice))
 		}
+	case "delete":
+		if len(args) != 2 {
+			panic("delete 需要两个参数")
+		}
 
+		runtimeMap, ok := args[0].(*RuntimeMap)
+		if !ok {
+			panic(fmt.Sprintf(
+				"delete 第一个参数不是 *RuntimeMap，而是 %T",
+				args[0],
+			))
+		}
+		if runtimeMap == nil || runtimeMap.Nil {
+			return false
+		}
+
+		key := makeMapKey(runtimeMap, args[1])
+		delete(runtimeMap.Entries, key)
+		return false
 	default:
 		panic(fmt.Sprintf("不支持的 Builtin 函数: %s", builtin.Name()))
 	}

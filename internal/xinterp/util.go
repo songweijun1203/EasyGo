@@ -24,7 +24,7 @@ func zeroOf(t types.Type) Value {
 			return ""
 		}
 
-	case *types.Pointer, *types.Map, *types.Chan, *types.Signature, *types.Interface:
+	case *types.Pointer, *types.Chan, *types.Signature, *types.Interface:
 		// 引用类型（指针、map、通道、函数、接口）的零值统一是 nil
 		return nil
 
@@ -45,6 +45,13 @@ func zeroOf(t types.Type) Value {
 		return arr
 	case *types.Slice:
 		return &RuntimeSlice{ElemType: u.Elem(), Nil: true}
+	case *types.Map:
+		return &RuntimeMap{
+			KeyType:  u.Key(),
+			ElemType: u.Elem(),
+			Entries:  nil,
+			Nil:      true,
+		}
 	default:
 		// 兜底：如果遇到无法识别的类型，返回 nil
 		return nil

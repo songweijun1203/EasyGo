@@ -112,3 +112,10 @@ func printSlice() {
 	s := []int{1, 2, 3}
 	fmt.Println(s)
 }
+
+func testMapUpdate() int {
+	m := make(map[string]int)
+	m["answer"] = 1
+	m["answer"] = 42
+	return m["answer"]
+}

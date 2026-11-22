@@ -25,6 +25,43 @@ type RuntimeStruct struct {
 	Fields map[string]*Cell
 }
 
+// RuntimeMap 是解释器内部的map表示
+type RuntimeMap struct {
+	KeyType  types.Type
+	ElemType types.Type
+	Entries  map[MapKey]*Cell
+	Nil      bool //用于表示map的零值，不能用普通的零值，应为还需要知道key/value类型
+}
+
+func (m *RuntimeMap) Len() int {
+	if m == nil || m.Nil {
+		return 0
+	}
+	return len(m.Entries)
+}
+
+type MapKey struct {
+	Type  string //类型，如int
+	Value interface{}
+}
+
+func makeMapKey(runtimeMap *RuntimeMap, value Value) MapKey {
+	value = readCell(value)
+
+	switch value.(type) {
+	case int, string, bool:
+		return MapKey{
+			Type:  runtimeMap.KeyType.String(),
+			Value: value,
+		}
+	default:
+		panic(fmt.Sprintf(
+			"暂不支持 %T 作为 map key",
+			value,
+		))
+	}
+}
+
 func readCell(value Value) Value {
 	cell, ok := value.(*Cell)
 	if !ok || cell == nil {
@@ -78,6 +115,53 @@ func (s *RuntimeSlice) appendSlice(other *RuntimeSlice) *RuntimeSlice {
 	return s
 }
 
+func nativeMap(runtimeMap *RuntimeMap, target reflect.Type) reflect.Value {
+	if runtimeMap == nil {
+		return reflect.Zero(target)
+	}
+
+	// 目标是 interface{} 时，根据 RuntimeMap 的类型推导真实 map 类型
+	if target.Kind() == reflect.Interface {
+		target = reflect.MapOf(
+			reflectTypeFor(runtimeMap.KeyType),
+			reflectTypeFor(runtimeMap.ElemType),
+		)
+	}
+
+	if target.Kind() != reflect.Map {
+		panic(fmt.Sprintf(
+			"不能将 RuntimeMap 转换为 %v",
+			target,
+		))
+	}
+
+	// typed nil map
+	if runtimeMap.Nil {
+		return reflect.Zero(target)
+	}
+
+	result := reflect.MakeMapWithSize(
+		target,
+		len(runtimeMap.Entries),
+	)
+
+	for key, cell := range runtimeMap.Entries {
+		nativeKey := nativeValue(
+			key.Value,
+			target.Key(),
+		)
+
+		nativeValue := nativeValue(
+			readCell(cell),
+			target.Elem(),
+		)
+
+		result.SetMapIndex(nativeKey, nativeValue)
+	}
+
+	return result
+}
+
 func nativeValue(value Value, target reflect.Type) reflect.Value {
 	value = readCell(value)
 	if value == nil {
@@ -87,6 +171,8 @@ func nativeValue(value Value, target reflect.Type) reflect.Value {
 	switch value := value.(type) {
 	case *RuntimeSlice:
 		return nativeSlice(value, target)
+	case *RuntimeMap:
+		return nativeMap(value, target)
 	case *RuntimeStruct:
 		if target.Kind() != reflect.Interface {
 			panic(fmt.Sprintf("不能将 RuntimeStruct 转换为 %v", target))
@@ -143,6 +229,11 @@ func nativeInterfaceValue(value Value) interface{} {
 			fields[name] = nativeInterfaceValue(readCell(cell))
 		}
 		return fields
+	case *RuntimeMap:
+		return nativeMap(
+			value,
+			reflect.TypeOf((*interface{})(nil)).Elem(),
+		).Interface()
 	default:
 		return value
 	}
