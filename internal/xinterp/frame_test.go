@@ -156,4 +156,10 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("testMapUpdate() = %v, want 42", result)
 		}
 	}
+
+	// 测试 13：闭包测试
+	{
+		Fn := findFunctionByName(t, pkgs, "testClosure")
+		interp.RunFunction(Fn)
+	}
 }

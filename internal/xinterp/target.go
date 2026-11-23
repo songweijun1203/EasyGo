@@ -119,3 +119,20 @@ func testMapUpdate() int {
 	m["answer"] = 42
 	return m["answer"]
 }
+
+// 测试闭包：计数器
+func makeCounter() func() int {
+	count := 0
+	return func() int {
+		count++
+		return count
+	}
+}
+
+func testClosure() {
+	counter := makeCounter()
+
+	println("First call:", counter())  // 期望输出: 1
+	println("Second call:", counter()) // 期望输出: 2
+	println("Third call:", counter())  // 期望输出: 3
+}

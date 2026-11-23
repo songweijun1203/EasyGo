@@ -35,6 +35,12 @@ type Frame struct {
 	result     Value               // 当前帧的返回值，存储了函数执行后的结果
 }
 
+// Closure 表示一个闭包对象
+type Closure struct {
+	Fn       *ssa.Function // 闭包关联的底层函数
+	FreeVars []*Cell       // 捕获的自由变量（核心：存的是 *Cell 指针，实现状态共享）
+}
+
 func RunFunction(fn *ssa.Function, args ...Value) Value {
 	return (&Interp{globals: make(map[*ssa.Global]*Cell)}).RunFunction(fn, args...)
 }
@@ -369,6 +375,27 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		// 写入或更新 Cell
 		rm.Entries[mk] = &Cell{Value: valVal}
 		return false
+	case *ssa.MakeClosure:
+		// 1. 收集需要捕获的自由变量的地址
+		cells := make([]*Cell, len(instr.Bindings))
+		for i, binding := range instr.Bindings {
+			// 【核心魔法】：必须用 getVarAddr 获取地址，而不是 getVarValue 获取值！
+			// 这样闭包拿到的就是外层变量的“引用”，而不是“拷贝”
+			cells[i] = f.getVarAddr(binding)
+		}
+
+		// 2. 创建闭包对象并存入 env
+		// instr.Fn 通常是一个 *ssa.Function
+		fn, ok := instr.Fn.(*ssa.Function)
+		if !ok {
+			panic(fmt.Sprintf("MakeClosure 的目标不是函数: %T", instr.Fn))
+		}
+
+		f.env_values[instr] = &Closure{
+			Fn:       fn,
+			FreeVars: cells,
+		}
+		return false
 	default:
 		// 处理其他类型的指令
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
@@ -493,9 +520,22 @@ func (f *Frame) executeCall(instr *ssa.Call) bool {
 		return f.executeBuiltin(instr, builtin)
 	}
 
-	fn, ok := callee.(*ssa.Function)
-	if !ok {
-		panic(fmt.Sprintf("暂时不支持调用非普通函数: %T", callee))
+	// 静态函数直接使用 SSA 中的函数对象；动态函数值（包括闭包参数）
+	// 必须先从当前帧读取，可能位于 env_values 或 env_slots 中。
+	var fn *ssa.Function
+	if staticFn, ok := callee.(*ssa.Function); ok {
+		fn = staticFn
+	} else {
+		runtimeCallee := f.getVarValue(callee)
+		if closure, ok := runtimeCallee.(*Closure); ok {
+			return f.executeClosureCall(instr, closure)
+		}
+
+		var ok bool
+		fn, ok = runtimeCallee.(*ssa.Function)
+		if !ok {
+			panic(fmt.Sprintf("暂时不支持调用非普通函数: %T", runtimeCallee))
+		}
 	}
 
 	//收集参数
@@ -671,6 +711,54 @@ func (f *Frame) executeExternalCall(instr *ssa.Call, fn *ssa.Function, args []Va
 	}
 
 	return false
+}
+
+// executeClosureCall 专门处理闭包的调用
+func (f *Frame) executeClosureCall(instr *ssa.Call, closure *Closure) bool {
+	fn := closure.Fn
+
+	// 1. 收集调用时传入的显式参数
+	var args []Value
+	for _, arg := range instr.Common().Args {
+		args = append(args, f.getVarValue(arg))
+	}
+
+	// 2. 创建新的执行帧
+	newF := &Frame{
+		interp:     f.interp,
+		fn:         fn,
+		block:      fn.Blocks[0],
+		env_values: make(map[ssa.Value]Value),
+		env_slots:  make(map[ssa.Value]*Cell),
+	}
+
+	// 3. 绑定自由变量 (FreeVars)
+	// 在 SSA 中，闭包函数的自由变量会按顺序记录在 fn.FreeVars 列表中
+	// 我们直接把闭包捕获的 *Cell 指针赋给新帧的 env，实现完美的状态共享！
+	for i, freeVarSSA := range fn.FreeVars {
+		newF.env_slots[freeVarSSA] = closure.FreeVars[i]
+	}
+
+	// 4. 绑定普通参数 (Params)
+	for i, param := range fn.Params {
+		box := new(Cell)
+		if i < len(args) {
+			box.Value = args[i]
+		} else {
+			box.Value = zeroOf(param.Type())
+		}
+		newF.env_slots[param] = box
+	}
+
+	// 5. 执行闭包函数
+	newF.run()
+
+	// 6. 将结果存回当前帧的 env
+	if fn.Signature.Results().Len() > 0 {
+		f.env_values[instr] = newF.result
+	}
+
+	return false // 闭包调用后继续执行当前帧
 }
 
 // 获取变量值

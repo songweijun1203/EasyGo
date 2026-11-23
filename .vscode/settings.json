@@ -1,11 +1,12 @@
 {
-    "workbench.colorTheme": "Dark 2026",
+    "workbench.colorTheme": "Light+",
     //"editor.accessibilityPageSize": 14,
     //"editor.fontFamily": "Sitka Text",
     "cmake.pinnedCommands": [
         "workbench.action.tasks.configureTaskRunner",
         "workbench.action.tasks.runTask"
     ],
+    "editor.fontSize": 15,
     "terminal.integrated.fontSize": 15,
     "terminal.integrated.env.windows":{
         "PATH":"C:\\Qt\\5.15.2\\msvc2019_64\\bin;${env:PATH}"
