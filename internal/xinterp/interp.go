@@ -22,22 +22,20 @@ type Interp struct {
 
 func NewInterp() *Interp {
 	return &Interp{
-		//globals: make(map[*ssa.Global]*Cell),
+		globals: make(map[*ssa.Global]*Cell),
 	}
 }
 
 func (i *Interp) RunFunction(fn *ssa.Function, args ...Value) Value {
 	f := NewFrame(i, fn)
 
-	// 当前实现把参数统一放入槽位表，保证参数被取地址时仍然可写。
-	for i, param := range fn.Params {
-		box := new(Cell)
-		if i < len(args) {
-			box.Value = args[i] // 把传进来的实参放进去
-		} else {
-			box.Value = zeroOf(param.Type()) // 防止参数个数不匹配时的兜底
+	// 参数是 SSA 值，直接绑定到寄存器。需要取地址时，SSA 会显式生成 Alloc。
+	for index, param := range fn.Params {
+		value := zeroOf(param.Type())
+		if index < len(args) {
+			value = args[index]
 		}
-		f.env_slots[param] = box
+		f.setValue(param, value)
 	}
 
 	f.run() // 执行当前帧的指令

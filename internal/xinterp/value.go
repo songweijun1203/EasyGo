@@ -6,7 +6,8 @@ import (
 	"reflect"
 )
 
-// Cell 表示一个可寻址的解释器存储槽。普通值不需要经过 Cell。
+// Cell 表示一个可寻址的解释器存储槽；*Cell 是 SSA 指针值的运行时表示。
+// 普通值直接保存在寄存器中，不需要经过 Cell。
 type Cell struct {
 	Value Value
 }

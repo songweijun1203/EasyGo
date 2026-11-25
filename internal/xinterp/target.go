@@ -136,3 +136,36 @@ func testClosure() {
 	println("Second call:", counter()) // 期望输出: 2
 	println("Third call:", counter())  // 期望输出: 3
 }
+
+func mutateParamCopy(value int) int {
+	ptr := &value
+	*ptr = 99
+	return value
+}
+
+func testParamAddress() int {
+	value := 10
+	changedCopy := mutateParamCopy(value)
+	return value*100 + changedCopy
+}
+
+func setThroughPointer(ptr *int) {
+	*ptr = 7
+}
+
+func testPointerParam() int {
+	value := 1
+	setThroughPointer(&value)
+	return value
+}
+
+func testPointerPhi(useSecond bool) int {
+	first := 1
+	second := 2
+	ptr := &first
+	if useSecond {
+		ptr = &second
+	}
+	*ptr = 9
+	return first*10 + second
+}

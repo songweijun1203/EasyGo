@@ -171,4 +171,31 @@ func TestControlFlow(t *testing.T) {
 		Fn := findFunctionByName(t, pkgs, "testClosure")
 		interp.RunFunction(Fn)
 	}
+
+	// 测试 14：对形参取地址只修改被调用函数中的参数副本
+	{
+		fn := findFunctionByName(t, pkgs, "testParamAddress")
+		if result := interp.RunFunction(fn); result != 1099 {
+			t.Fatalf("testParamAddress() = %v, want 1099", result)
+		}
+	}
+
+	// 测试 15：指针参数保留地址并写回调用者的存储槽
+	{
+		fn := findFunctionByName(t, pkgs, "testPointerParam")
+		if result := interp.RunFunction(fn); result != 7 {
+			t.Fatalf("testPointerParam() = %v, want 7", result)
+		}
+	}
+
+	// 测试 16：Phi 在分支汇合时保留指针值，不读取 Cell 内容
+	{
+		fn := findFunctionByName(t, pkgs, "testPointerPhi")
+		if result := interp.RunFunction(fn, false); result != 92 {
+			t.Fatalf("testPointerPhi(false) = %v, want 92", result)
+		}
+		if result := interp.RunFunction(fn, true); result != 19 {
+			t.Fatalf("testPointerPhi(true) = %v, want 19", result)
+		}
+	}
 }
