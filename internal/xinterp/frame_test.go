@@ -42,11 +42,20 @@ func findFunctionByName(t *testing.T, pkgs []*packages.Package, funcName string)
 }
 
 func TestControlFlow(t *testing.T) {
-	pkgs := setupSSA(t)
-	interp := &Interp{
-		globals: make(map[*ssa.Global]*Cell),
+	//pkgs := setupSSA(t)
+	interp := NewInterp()
+	err := interp.Load(
+		&packages.Config{
+			Mode: packages.LoadAllSyntax,
+			Dir:  "./",
+		},
+		"./",
+	)
+	if err != nil {
+		return
 	}
 
+	pkgs := interp.sourcePkgs
 	// 测试 1：add (线性)
 	{
 		addFn := findFunctionByName(t, pkgs, "add")

@@ -35,6 +35,17 @@ type Frame struct {
 	result     Value               // 当前帧的返回值，存储了函数执行后的结果
 }
 
+func NewFrame(i *Interp, fn *ssa.Function) *Frame {
+	f := &Frame{
+		interp:     i,
+		fn:         fn,
+		block:      fn.Blocks[0],
+		env_values: make(map[ssa.Value]Value),
+		env_slots:  make(map[ssa.Value]*Cell),
+	}
+	return f
+}
+
 // Closure 表示一个闭包对象
 type Closure struct {
 	Fn       *ssa.Function // 闭包关联的底层函数
@@ -108,32 +119,77 @@ func (f *Frame) executePhis(phis []*ssa.Phi) {
 	}
 }
 
-// 执行单条指令，根据指令类型进行不同的处理。
+// execute 执行一条 SSA 指令，并返回当前基本块是否已经结束。
+// Phi 不在这里执行；进入基本块时由 executePhis 统一处理。
 func (f *Frame) execute(instr ssa.Instruction) bool {
 	switch instr := instr.(type) {
-	case *ssa.BinOp:
-		// 处理二元操作指令
-		f.env_values[instr] = f.evalBinOp(instr.Op, f.getVarValue(instr.X), f.getVarValue(instr.Y))
-		return false //普通指令，继续执行
-	case *ssa.UnOp:
-		// 处理一元操作指令
-		// 常见情况：取地址、取值、逻辑非等
-		f.env_values[instr] = f.evealUnOp(instr)
-		return false
+	// ===== 控制流：会改变当前 Frame.block =====
+	case *ssa.Jump:
+		// 无条件跳到当前块唯一的后继块。
+		f.block = instr.Block().Succs[0]
+		return true
+	case *ssa.If:
+		// 根据条件选择两个后继块中的一个。
+		if f.getVarValue(instr.Cond).(bool) {
+			f.block = instr.Block().Succs[0]
+		} else {
+			f.block = instr.Block().Succs[1]
+		}
+		return true
 	case *ssa.Return:
-		// 处理返回指令
+		// 保存返回值，并将 block 置空，让 run 结束当前函数。
 		if len(instr.Results) == 1 {
-			f.result = f.getVarValue(instr.Results[0]) // 修复 2：直接读 env
+			f.result = f.getVarValue(instr.Results[0])
 		} else if len(instr.Results) > 1 {
 			tuple := make([]Value, len(instr.Results))
-			for i, r := range instr.Results {
-				tuple[i] = f.getVarValue(r)
+			for i, result := range instr.Results {
+				tuple[i] = f.getVarValue(result)
 			}
 			f.result = tuple
 		}
-		f.block = nil // 置空，主循环退出
+		f.block = nil
 		return true
-	case *ssa.Extract: //处理多返回值的拆解
+
+	// ===== 值计算：生成或变换普通 SSA 值 =====
+	case *ssa.BinOp:
+		f.env_values[instr] = f.evalBinOp(instr.Op, f.getVarValue(instr.X), f.getVarValue(instr.Y))
+		return false
+	case *ssa.UnOp:
+		f.env_values[instr] = f.evealUnOp(instr)
+		return false
+	case *ssa.Convert:
+		val := f.getVarValue(instr.X)
+		targetType := instr.Type().Underlying().(*types.Basic)
+
+		switch targetType.Info() {
+		case types.IsInteger:
+			switch v := val.(type) {
+			case int:
+				f.env_values[instr] = v
+			case float64:
+				f.env_values[instr] = int(v)
+			default:
+				panic(fmt.Sprintf("cannot convert %T to int", val))
+			}
+		case types.IsFloat:
+			switch v := val.(type) {
+			case int:
+				f.env_values[instr] = float64(v)
+			case float64:
+				f.env_values[instr] = v
+			default:
+				panic(fmt.Sprintf("cannot convert %T to float64", val))
+			}
+		default:
+			panic(fmt.Sprintf("unsupported Convert target type: %v", targetType))
+		}
+		return false
+	case *ssa.MakeInterface:
+		// 当前解释器直接使用接口中的底层运行时值。
+		f.env_values[instr] = f.getVarValue(instr.X)
+		return false
+	case *ssa.Extract:
+		// 从多返回值调用产生的 tuple 中取出指定位置的值。
 		tupleVal := f.getVarValue(instr.Tuple)
 		if tuple, ok := tupleVal.([]Value); ok {
 			f.env_values[instr] = tuple[instr.Index]
@@ -141,36 +197,52 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 			panic(fmt.Sprintf("Extract 操作数不是 Tuple ([]Value), 而是 %T", tupleVal))
 		}
 		return false
-		// ====== 新增的控制流指令 ======
-	case *ssa.Jump:
-		// Jump 指令无条件跳转到第一个后继块
-		f.block = instr.Block().Succs[0] // 修复 1：使用 Block().Succs[0] 获取后继块
-		return true
-	case *ssa.If:
-		// If 指令根据条件跳转到两个后继块之一
-		cond := f.getVarValue(instr.Cond).(bool)
-		if cond {
-			f.block = instr.Block().Succs[0] // 条件为真，跳转到第一个后继块
-		} else {
-			f.block = instr.Block().Succs[1] // 条件为假，跳转到第二个后继块
-		}
-		return true
+
+	// ===== 存储与地址：操作 Cell 或产生可寻址位置 =====
 	case *ssa.Alloc:
-		// 处理内存分配指令
+		// 为局部变量分配 Cell，并写入该变量类型的零值。
 		box := new(Cell)
 		elemType := instr.Type().Underlying().(*types.Pointer).Elem()
 		box.Value = zeroOf(elemType)
 		f.env_slots[instr] = box
 		return false
 	case *ssa.Store:
-		// 处理存储指令
+		// 将普通运行时值写入目标 Cell。
 		addr := f.getVarAddr(instr.Addr)
-		val := f.getVarValue(instr.Val)
-		addr.Value = val
+		addr.Value = f.getVarValue(instr.Val)
 		return false
-	case *ssa.MakeInterface:
-		// 接口值在解释器中直接使用其底层值表示。
-		f.env_values[instr] = f.getVarValue(instr.X)
+	case *ssa.FieldAddr:
+		// 返回结构体字段对应的 Cell，供后续 Store 使用。
+		addr := f.getVarAddr(instr.X)
+		st, ok := addr.Value.(*RuntimeStruct)
+		if !ok {
+			panic(fmt.Sprintf("FieldAddr 操作数不是 RuntimeStruct, 而是 %T", addr.Value))
+		}
+		ptrType := instr.X.Type().Underlying().(*types.Pointer)
+		structType := ptrType.Elem().Underlying().(*types.Struct)
+		fieldName := structType.Field(instr.Field).Name()
+		f.env_slots[instr] = st.Fields[fieldName]
+		return false
+	case *ssa.IndexAddr:
+		// 返回切片元素对应的 Cell，保证元素赋值可以回写原切片。
+		index := f.getVarValue(instr.Index).(int)
+		collection, ok := f.getVarValue(instr.X).(*RuntimeSlice)
+		if !ok || collection == nil {
+			panic(fmt.Sprintf("不支持对 %T 取元素地址", f.getVarValue(instr.X)))
+		}
+		f.env_slots[instr] = collection.Elements[index]
+		return false
+
+	// ===== 聚合值与索引：处理结构体、切片和元素读取 =====
+	case *ssa.Field:
+		structVal := f.getVarValue(instr.X)
+		st, ok := structVal.(*RuntimeStruct)
+		if !ok {
+			panic(fmt.Sprintf("Field 操作数不是 RuntimeStruct, 而是 %T", structVal))
+		}
+		structType := instr.X.Type().Underlying().(*types.Struct)
+		fieldName := structType.Field(instr.Field).Name()
+		f.env_values[instr] = readCell(st.Fields[fieldName])
 		return false
 	case *ssa.MakeSlice:
 		length := f.getVarValue(instr.Len).(int)
@@ -185,15 +257,18 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		}
 		f.env_values[instr] = runtimeSlice
 		return false
-	case *ssa.IndexAddr:
-		index := f.getVarValue(instr.Index).(int)
-		collection, ok := f.getVarValue(instr.X).(*RuntimeSlice)
-		if !ok || collection == nil {
-			panic(fmt.Sprintf("不支持对 %T 取元素地址", f.getVarValue(instr.X)))
+	case *ssa.Index:
+		x := f.getVarValue(instr.X)
+		i := f.getVarValue(instr.Index).(int)
+		switch v := x.(type) {
+		case string:
+			f.env_values[instr] = v[i]
+		case *RuntimeSlice:
+			f.env_values[instr] = readCell(v.Elements[i])
+		default:
+			panic(fmt.Sprintf("不支持对 %T 进行索引", x))
 		}
-		f.env_slots[instr] = collection.Elements[index]
 		return false
-
 	case *ssa.Slice:
 		collection := f.getVarValue(instr.X)
 		low, high := 0, -1
@@ -226,72 +301,9 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 			panic(fmt.Sprintf("不支持对 %T 进行切片", collection))
 		}
 		return false
-	case *ssa.Call:
-		// 处理函数调用指令
-		return f.executeCall(instr)
-	case *ssa.Index:
-		x := f.getVarValue(instr.X)           // 被索引的对象（字符串或数组）
-		i := f.getVarValue(instr.Index).(int) // 索引下标
-		switch v := x.(type) {
-		case string:
-			f.env_values[instr] = v[i]
-		case *RuntimeSlice:
-			f.env_values[instr] = readCell(v.Elements[i])
-		default:
-			panic(fmt.Sprintf("不支持对 %T 进行索引", x))
-		}
-		return false
-	case *ssa.Convert:
-		val := f.getVarValue(instr.X)
-		targetType := instr.Type().Underlying().(*types.Basic)
 
-		switch targetType.Info() {
-		case types.IsInteger:
-			switch v := val.(type) {
-			case int:
-				f.env_values[instr] = v
-			case float64:
-				f.env_values[instr] = int(v) // float 转 int，截断小数
-			default:
-				panic(fmt.Sprintf("cannot convert %T to int", val))
-			}
-		case types.IsFloat:
-			switch v := val.(type) {
-			case int:
-				f.env_values[instr] = float64(v) // int 转 float
-			case float64:
-				f.env_values[instr] = v
-			default:
-				panic(fmt.Sprintf("cannot convert %T to float64", val))
-			}
-		default:
-			panic(fmt.Sprintf("unsupported Convert target type: %v", targetType))
-		}
-		return false
-	case *ssa.Field: //结构体字段的值
-		// 获取结构体字段值。
-		structVal := f.getVarValue(instr.X)
-		st, ok := structVal.(*RuntimeStruct)
-		if !ok {
-			panic(fmt.Sprintf("Field 操作数不是 RuntimeStruct, 而是 %T", structVal))
-		}
-		structType := instr.X.Type().Underlying().(*types.Struct)
-		fieldName := structType.Field(instr.Field).Name()
-		f.env_values[instr] = readCell(st.Fields[fieldName])
-		return false
-	case *ssa.FieldAddr: //结构体字段的地址
-		addr := f.getVarAddr(instr.X)
-		st, ok := addr.Value.(*RuntimeStruct)
-		if !ok {
-			panic(fmt.Sprintf("FieldAddr 操作数不是 RuntimeStruct, 而是 %T", addr.Value))
-		}
-		ptrType := instr.X.Type().Underlying().(*types.Pointer)
-		structType := ptrType.Elem().Underlying().(*types.Struct)
-		fieldName := structType.Field(instr.Field).Name()
-		f.env_slots[instr] = st.Fields[fieldName]
-		return false
+	// ===== Map：创建、读取和更新 RuntimeMap =====
 	case *ssa.MakeMap:
-		//env_values[instr] = &RuntimeMap{...}
 		mapType, ok := instr.Type().Underlying().(*types.Map)
 		if !ok {
 			panic(fmt.Sprintf("MakeMap 类型不是 map: %v", instr.Type()))
@@ -315,19 +327,15 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 	case *ssa.Lookup:
 		mapVal := f.getVarValue(instr.X)
 		keyVal := f.getVarValue(instr.Index)
-		// 2. 类型断言，确保它是我们的 RuntimeMap
 		rm, ok := mapVal.(*RuntimeMap)
 		if !ok {
 			panic(fmt.Sprintf("Lookup 操作数不是 *RuntimeMap, 而是 %T", mapVal))
 		}
-		// 3. 处理 nil map 的情况
 		if rm == nil || rm.Nil {
 			if instr.CommaOk {
-				// CommaOk 为 true 时，instr.Type() 是 *types.Tuple，第 0 个元素是 value 类型
 				elemType := instr.Type().(*types.Tuple).At(0).Type()
 				f.env_values[instr] = []Value{zeroOf(elemType), false}
 			} else {
-				// 直接返回 value 类型的零值
 				f.env_values[instr] = zeroOf(instr.Type())
 			}
 			return false
@@ -335,69 +343,55 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 
 		mk := makeMapKey(rm, keyVal)
 		cell, found := rm.Entries[mk]
-		// 5. 根据 CommaOk 标志返回不同的结果
 		if instr.CommaOk {
 			if found {
-				// 找到了：返回 (值, true)
 				f.env_values[instr] = []Value{readCell(cell), true}
 			} else {
-				// 没找到：返回 (零值, false)
 				elemType := instr.Type().(*types.Tuple).At(0).Type()
 				f.env_values[instr] = []Value{zeroOf(elemType), false}
 			}
+		} else if found {
+			f.env_values[instr] = readCell(cell)
 		} else {
-			if found {
-				// 找到了：直接返回值
-				f.env_values[instr] = readCell(cell)
-			} else {
-				// 没找到：返回零值
-				f.env_values[instr] = zeroOf(instr.Type())
-			}
+			f.env_values[instr] = zeroOf(instr.Type())
 		}
 		return false
 	case *ssa.MapUpdate:
 		mapVal := f.getVarValue(instr.Map)
 		keyVal := f.getVarValue(instr.Key)
 		valVal := f.getVarValue(instr.Value)
-
 		rm, ok := mapVal.(*RuntimeMap)
 		if !ok {
 			panic(fmt.Sprintf("MapUpdate 操作数不是 *RuntimeMap, 而是 %T", mapVal))
 		}
-
-		// Go 语义：对 nil map 写入会 panic
+		// Go 语义：对 nil map 写入会 panic。
 		if rm == nil || rm.Nil {
 			panic("assignment to entry in nil map")
 		}
-
-		mk := makeMapKey(rm, keyVal)
-
-		// 写入或更新 Cell
-		rm.Entries[mk] = &Cell{Value: valVal}
+		rm.Entries[makeMapKey(rm, keyVal)] = &Cell{Value: valVal}
 		return false
+
+	// ===== 函数与闭包：执行调用或创建闭包值 =====
+	case *ssa.Call:
+		return f.executeCall(instr)
 	case *ssa.MakeClosure:
-		// 1. 收集需要捕获的自由变量的地址
+		// 捕获自由变量的 Cell，而不是复制自由变量当前的值。
 		cells := make([]*Cell, len(instr.Bindings))
 		for i, binding := range instr.Bindings {
-			// 【核心魔法】：必须用 getVarAddr 获取地址，而不是 getVarValue 获取值！
-			// 这样闭包拿到的就是外层变量的“引用”，而不是“拷贝”
 			cells[i] = f.getVarAddr(binding)
 		}
 
-		// 2. 创建闭包对象并存入 env
-		// instr.Fn 通常是一个 *ssa.Function
 		fn, ok := instr.Fn.(*ssa.Function)
 		if !ok {
 			panic(fmt.Sprintf("MakeClosure 的目标不是函数: %T", instr.Fn))
 		}
-
 		f.env_values[instr] = &Closure{
 			Fn:       fn,
 			FreeVars: cells,
 		}
 		return false
+
 	default:
-		// 处理其他类型的指令
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
 	}
 }
@@ -515,6 +509,7 @@ func (f *Frame) evealUnOp(instr *ssa.UnOp) Value {
 // 处理函数调用
 func (f *Frame) executeCall(instr *ssa.Call) bool {
 	callee := instr.Common().Value
+	//callee的可能取值*ssa.Builtin 、*ssa.Function、 *ssa.MakeClosure、*ssa.UnOp接口取出的闭包
 	//先判断是不是内建函数
 	if builtin, ok := callee.(*ssa.Builtin); ok {
 		return f.executeBuiltin(instr, builtin)
