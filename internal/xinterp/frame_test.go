@@ -198,4 +198,28 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("testPointerPhi(true) = %v, want 19", result)
 		}
 	}
+
+	// 测试 17：range map 累加所有 value（顺序无关，断言安全）
+	{
+		fn := findFunctionByName(t, pkgs, "testRangeMap")
+		if result := interp.RunFunction(fn); result != 6 {
+			t.Fatalf("testRangeMap() = %v, want 6", result)
+		}
+	}
+
+	// 测试 18：range string 的 key 是字节下标，必须按 UTF-8 宽度前进
+	{
+		fn := findFunctionByName(t, pkgs, "testRangeStringUTF8")
+		if result := interp.RunFunction(fn); result != 3 {
+			t.Fatalf("testRangeStringUTF8() = %v, want 3", result)
+		}
+	}
+
+	// 测试 19：range string 的 value 是 rune，且与本解释器 int 归一化自洽
+	{
+		fn := findFunctionByName(t, pkgs, "testRangeStringValue")
+		if result := interp.RunFunction(fn); result != 20110 {
+			t.Fatalf("testRangeStringValue() = %v, want 20110", result)
+		}
+	}
 }

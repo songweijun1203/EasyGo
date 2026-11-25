@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"go/types"
 	"reflect"
+	"unicode/utf8"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -411,6 +412,59 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		})
 		return false
 
+	// ===== Range循环：创建迭代器 =====
+	case *ssa.Range:
+		coll := f.getValue(instr.X)
+		rr := &RuntimeRange{
+			Collection: coll,
+			Index:      0,
+		}
+
+		//如果是Map,需要预先提取所有的key，从而保证一种确定的方式来瑞金索引
+		if rm, ok := coll.(*RuntimeMap); ok {
+			if rm != nil && !rm.Nil {
+				rr.Keys = make([]MapKey, 0, len(rm.Entries))
+				for k := range rm.Entries {
+					rr.Keys = append(rr.Keys, k)
+				}
+			}
+		}
+		f.setValue(instr, rr)
+		return false
+	case *ssa.Next:
+		iterVal := f.getValue(instr.Iter)
+		rr, ok := iterVal.(*RuntimeRange)
+		if !ok {
+			panic(fmt.Sprintf("Next 操作数不是 *RuntimeRange, 而是 %T", iterVal))
+		}
+		tupleType := instr.Type().(*types.Tuple)
+		okVal := false
+		keyVal := zeroOf(tupleType.At(1).Type())
+		elemVal := zeroOf(tupleType.At(2).Type())
+
+		switch coll := rr.Collection.(type) {
+		case *RuntimeMap:
+			if coll != nil && !coll.Nil && rr.Index < len(rr.Keys) {
+				mk := rr.Keys[rr.Index]
+				okVal = true
+				keyVal = mk.Value
+				elemVal = readCell(coll.Entries[mk])
+				rr.Index++
+			}
+		case string:
+			if rr.Index < len(coll) {
+				r, size := utf8.DecodeRuneInString(coll[rr.Index:])
+				okVal = true
+				keyVal = rr.Index // key 是字节下标
+				elemVal = int(r)  // 见下方说明：用 int 而非 int32
+				rr.Index += size  // 按 rune 的字节宽度前进，不是 +1
+			}
+		default:
+			panic(fmt.Sprintf("Range 不支持的集合类型: %T", coll))
+		}
+
+		f.setValue(instr, []Value{okVal, keyVal, elemVal})
+		return false
 	default:
 		panic(fmt.Sprintf("unsupported instruction: %T", instr))
 	}

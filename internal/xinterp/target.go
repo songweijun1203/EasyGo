@@ -169,3 +169,31 @@ func testPointerPhi(useSecond bool) int {
 	*ptr = 9
 	return first*10 + second
 }
+
+func testRangeStringUTF8() int {
+	sum := 0
+	for i := range "中a" {
+		sum += i
+	}
+	return sum // 期望 3（0 + 3），不是 1
+}
+
+func testRangeMap() int {
+	m := make(map[string]int)
+	m["a"] = 1
+	m["b"] = 2
+	m["c"] = 3
+	sum := 0
+	for _, v := range m {
+		sum += v
+	}
+	return sum // 6
+}
+
+func testRangeStringValue() int {
+	sum := 0
+	for _, r := range "中a" {
+		sum += int(r)
+	}
+	return sum // 20013 + 97 = 20110
+}

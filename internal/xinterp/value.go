@@ -34,6 +34,12 @@ type RuntimeMap struct {
 	Nil      bool //用于表示map的零值，不能用普通的零值，应为还需要知道key/value类型
 }
 
+type RuntimeRange struct {
+	Collection Value    //被迭代的集合
+	Index      int      //当前迭代的索引
+	Keys       []MapKey //仅用于Map,预提取的key列表，用于确定遍历顺序
+}
+
 func (m *RuntimeMap) Len() int {
 	if m == nil || m.Nil {
 		return 0
