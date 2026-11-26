@@ -187,4 +187,36 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("testRangeStringValue() = %v, want 20110", result)
 		}
 	}
+
+	// 测试 20：string 索引返回 int
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testStringIndex")
+		if r := interp.RunFunction(fn); r != 97 {
+			t.Fatalf("testStringIndex() = %v, want 97", r)
+		}
+	}
+	// 测试 21：bool 相等
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testBoolEqual")
+		if r := interp.RunFunction(fn, true, true); r != 1 {
+			t.Fatalf("testBoolEqual(true,true) = %v, want 1", r)
+		}
+		if r := interp.RunFunction(fn, true, false); r != 0 {
+			t.Fatalf("testBoolEqual(true,false) = %v, want 0", r)
+		}
+	}
+	// 测试 22：位运算与移位
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testBitOps")
+		if r := interp.RunFunction(fn, 5); r != 6 {
+			t.Fatalf("testBitOps(5) = %v, want 6", r)
+		}
+	}
+	// 测试 23：指针 identity 比较
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testPointerEqual")
+		if r := interp.RunFunction(fn); r != 1 {
+			t.Fatalf("testPointerEqual() = %v, want 1", r)
+		}
+	}
 }

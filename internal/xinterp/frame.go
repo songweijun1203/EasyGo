@@ -50,6 +50,7 @@ type Closure struct {
 	FreeVars []*Cell       // 捕获的自由变量（核心：存的是 *Cell 指针，实现状态共享）
 }
 
+// 后续该接口会删除 TODO
 func RunFunction(fn *ssa.Function, args ...Value) Value {
 	return NewInterp().RunFunction(fn, args...)
 }
@@ -254,7 +255,7 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		i := f.getValue(instr.Index).(int)
 		switch v := x.(type) {
 		case string:
-			f.setValue(instr, v[i])
+			f.setValue(instr, int(v[i]))
 		case *RuntimeSlice:
 			f.setValue(instr, readCell(v.Elements[i]))
 		default:
@@ -454,6 +455,17 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 			return res
 		}
 	}
+	// 指针比较的是地址 identity，不是 Cell 里的值。
+	if cx, ok := x.(*Cell); ok {
+		if cy, ok := y.(*Cell); ok {
+			switch op {
+			case token.EQL:
+				return cx == cy
+			case token.NEQ:
+				return cx != cy
+			}
+		}
+	}
 	switch xv := x.(type) {
 	case int:
 		yv := y.(int)
@@ -468,6 +480,18 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 			return xv / yv
 		case token.REM:
 			return xv % yv
+		case token.AND:
+			return xv & yv
+		case token.OR:
+			return xv | yv
+		case token.XOR:
+			return xv ^ yv
+		case token.AND_NOT:
+			return xv &^ yv
+		case token.SHL:
+			return xv << uint(yv)
+		case token.SHR:
+			return xv >> uint(yv)
 		case token.EQL:
 			return xv == yv
 		case token.NEQ:
@@ -522,6 +546,17 @@ func (f *Frame) evalBinOp(op token.Token, x, y Value) Value {
 			return xv > yv
 		case token.GEQ:
 			return xv >= yv
+		}
+	case bool:
+		yv, ok := y.(bool)
+		if !ok {
+			panic(fmt.Sprintf("bool 运算另一侧不是 bool: %T", y))
+		}
+		switch op {
+		case token.EQL:
+			return xv == yv
+		case token.NEQ:
+			return xv != yv
 		}
 	}
 
@@ -810,17 +845,26 @@ func (f *Frame) getValue(v ssa.Value) Value {
 		if c.Value == nil {
 			return zeroOf(c.Type())
 		}
-		typeStr := c.Type().String()
-		switch typeStr {
-		case "untyped int", "int", "int64", "int32": // 注意这里可以列举你关心的整数类型
+
+		basic, ok := c.Type().Underlying().(*types.Basic)
+		if !ok {
+			panic(fmt.Sprintf("unsupported const type: %v", c.Type()))
+		}
+
+		switch {
+		case basic.Info()&types.IsInteger != 0:
+			// 覆盖 int/int8.../uint/uint8.../byte/rune/uintptr 及所有 untyped 整型。
+			// 本解释器把所有整型归一为 int。
+			if basic.Info()&types.IsUnsigned != 0 {
+				return int(c.Uint64())
+			}
 			return int(c.Int64())
-		case "untyped float", "float64", "float32":
-			// c.Float64() 返回 float64
-			val, _ := constant.Float64Val(c.Value)
-			return val
-		case "untyped bool", "bool":
+		case basic.Info()&types.IsFloat != 0:
+			f, _ := constant.Float64Val(c.Value)
+			return f
+		case basic.Info()&types.IsBoolean != 0:
 			return constant.BoolVal(c.Value)
-		case "untyped string", "string":
+		case basic.Info()&types.IsString != 0:
 			return constant.StringVal(c.Value)
 		}
 		panic(fmt.Sprintf("unsupported const type: %v", c.Type()))

@@ -197,3 +197,33 @@ func testRangeStringValue() int {
 	}
 	return sum // 20013 + 97 = 20110
 }
+
+// 测试 20：string 索引 → Convert，验证 byte 不能泄漏出去
+func testStringIndex() int {
+	s := "abc"
+	return int(s[0]) // 'a' = 97
+}
+
+// 测试 21：bool 相等比较
+func testBoolEqual(a, b bool) int {
+	if a == b {
+		return 1
+	}
+	return 0
+}
+
+// 测试 22：位运算与移位
+func testBitOps(x int) int {
+	return (x&1)<<2 | x>>1 // x=5 → 1<<2 | 2 = 4|2 = 6
+}
+
+// 测试 23：指针比较的是地址 identity，不是 Cell 里的值
+func testPointerEqual() int {
+	a, b := 1, 2
+	p, q := &a, &a
+	r := &b
+	if p == q && p != r {
+		return 1
+	}
+	return 0
+}
