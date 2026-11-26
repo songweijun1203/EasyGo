@@ -40,6 +40,11 @@ type RuntimeRange struct {
 	Keys       []MapKey //仅用于Map,预提取的key列表，用于确定遍历顺序
 }
 
+type RuntimeInterface struct {
+	DynType types.Type //装箱时候的具体类型
+	Value   Value      //底层运行时值
+}
+
 func (m *RuntimeMap) Len() int {
 	if m == nil || m.Nil {
 		return 0
@@ -169,8 +174,15 @@ func nativeMap(runtimeMap *RuntimeMap, target reflect.Type) reflect.Value {
 	return result
 }
 
+func unwrapInterface(v Value) Value {
+	if ri, ok := v.(*RuntimeInterface); ok {
+		return ri.Value
+	}
+	return v
+}
+
 func nativeValue(value Value, target reflect.Type) reflect.Value {
-	value = readCell(value)
+	value = readCell(unwrapInterface(value))
 	if value == nil {
 		return reflect.Zero(target)
 	}

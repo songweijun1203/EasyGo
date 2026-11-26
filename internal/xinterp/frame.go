@@ -176,8 +176,44 @@ func (f *Frame) execute(instr ssa.Instruction) bool {
 		}
 		return false
 	case *ssa.MakeInterface:
-		// 当前解释器直接使用接口中的底层运行时值。
-		f.setValue(instr, f.getValue(instr.X))
+		f.setValue(instr, &RuntimeInterface{
+			DynType: instr.X.Type(), // 源的静态类型 = 接口的动态类型
+			Value:   f.getValue(instr.X),
+		})
+		return false
+	case *ssa.TypeAssert:
+		x := f.getValue(instr.X)
+		var result Value
+		var matched bool
+
+		if ri, ok := x.(*RuntimeInterface); ok && ri != nil && ri.DynType != nil {
+			if assertedInterface, isInterface := instr.AssertedType.Underlying().(*types.Interface); isInterface {
+				if types.Implements(ri.DynType, assertedInterface) {
+					matched = true
+					result = ri
+				}
+			} else if types.Identical(ri.DynType, instr.AssertedType) {
+				matched = true
+				result = ri.Value
+			}
+		}
+		if instr.CommaOk {
+			if !matched {
+				result = zeroOf(instr.AssertedType)
+			}
+			f.setValue(instr, []Value{result, matched}) // (value, ok)，value 在前
+			return false
+		}
+
+		if !matched {
+			var dyn types.Type
+			if ri, ok := x.(*RuntimeInterface); ok {
+				dyn = ri.DynType
+			}
+			panic(fmt.Sprintf("interface conversion: interface {} is %v, not %v",
+				dyn, instr.AssertedType))
+		}
+		f.setValue(instr, result)
 		return false
 	case *ssa.Extract:
 		// 从多返回值调用产生的 tuple 中取出指定位置的值。

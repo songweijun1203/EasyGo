@@ -219,4 +219,36 @@ func TestControlFlow(t *testing.T) {
 			t.Fatalf("testPointerEqual() = %v, want 1", r)
 		}
 	}
+
+	// 测试 24：具体类型断言成功
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testTypeAssertSimple")
+		if r := interp.RunFunction(fn); r != 42 {
+			t.Fatalf("testTypeAssertSimple() = %v, want 42", r)
+		}
+	}
+
+	// 测试 25：具体类型断言失败时返回该类型零值和 false
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testTypeAssertMismatch")
+		if r := interp.RunFunction(fn); r != 1 {
+			t.Fatalf("testTypeAssertMismatch() = %v, want 1", r)
+		}
+	}
+
+	// 测试 26：nil 接口断言失败
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testTypeAssertNil")
+		if r := interp.RunFunction(fn); r != 1 {
+			t.Fatalf("testTypeAssertNil() = %v, want 1", r)
+		}
+	}
+
+	// 测试 27：动态类型实现目标接口时断言成功
+	{
+		fn, _ := interp.LookupFunction(packagePath, "testTypeAssertInterface")
+		if r := interp.RunFunction(fn); r != 1 {
+			t.Fatalf("testTypeAssertInterface() = %v, want 1", r)
+		}
+	}
 }

@@ -227,3 +227,49 @@ func testPointerEqual() int {
 	}
 	return 0
 }
+
+func testTypeAssertSimple() int {
+	var x any = 42
+	v, ok := x.(int)
+	if !ok {
+		return -1
+	}
+	return v // 42
+}
+
+func testTypeAssertMismatch() int {
+	var x any = "hello"
+	v, ok := x.(int)
+	if ok || v != 0 {
+		return -1
+	}
+	return 1
+}
+
+func testTypeAssertNil() int {
+	var x any
+	v, ok := x.(int)
+	if ok || v != 0 {
+		return -1
+	}
+	return 1
+}
+
+type testAssertStringer interface {
+	String() string
+}
+
+type testAssertInt int
+
+func (testAssertInt) String() string {
+	return "test"
+}
+
+func testTypeAssertInterface() int {
+	var x any = testAssertInt(42)
+	_, ok := x.(testAssertStringer)
+	if !ok {
+		return -1
+	}
+	return 1
+}
