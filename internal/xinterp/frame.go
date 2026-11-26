@@ -23,44 +23,24 @@ type Frame struct {
 	regIndex    map[ssa.Value]int // SSA 值到虚拟寄存器索引的映射
 	registers   []Value           // 寄存器保存 SSA 运行时值，*Cell 表示地址值
 	initialized []bool            // 区分未写入寄存器和合法的 nil 值
+	layout      *funcLayout       // 共享只读布局
+	//phiVals     []Value           // phi 并行赋值的暂存区，每帧独占，仅仅是为了减少重复分配
+
 }
 
 func NewFrame(i *Interp, fn *ssa.Function) *Frame {
-	regIndex := make(map[ssa.Value]int)
-	idx := 0
-
-	//先为函数的参数 (Params) 分配索引
-	for _, param := range fn.Params {
-		regIndex[param] = idx
-		idx++
-	}
-
-	// 2.为闭包捕获的自由变量 (FreeVars) 分配索引
-	for _, freeVar := range fn.FreeVars {
-		regIndex[freeVar] = idx
-		idx++
-	}
-
-	for _, block := range fn.Blocks {
-		for _, instr := range block.Instrs {
-			// 只有实现了 ssa.Value 接口的指令（即产生结果的指令，如 BinOp, Alloc, Phi 等）
-			// 才需要分配寄存器槽位。
-			if v, ok := instr.(ssa.Value); ok {
-				regIndex[v] = idx
-				idx++
-			}
-		}
-	}
+	layout := i.layoutOf(fn)
 
 	// 根据寄存器数量初始化值表和写入状态表。
-	registers := make([]Value, idx)
 	return &Frame{
 		interp:      i,
 		fn:          fn,
 		block:       fn.Blocks[0],
-		registers:   registers,
-		initialized: make([]bool, idx),
-		regIndex:    regIndex,
+		layout:      layout,
+		registers:   make([]Value, layout.size),
+		initialized: make([]bool, layout.size),
+		regIndex:    layout.regIndex,
+		//phiVals:     make([]Value, layout.maxPhis),
 	}
 }
 
@@ -71,32 +51,20 @@ type Closure struct {
 }
 
 func RunFunction(fn *ssa.Function, args ...Value) Value {
-	return (&Interp{globals: make(map[*ssa.Global]*Cell)}).RunFunction(fn, args...)
+	return NewInterp().RunFunction(fn, args...)
 }
 
 // 执行当前帧的指令，直到遇到返回指令或异常。
 func (f *Frame) run() {
 	for f.block != nil {
-		//1 分类收集指令
-		var phis []*ssa.Phi
-		var otherInstrs []ssa.Instruction
-		{
-			for _, instr := range f.block.Instrs {
-				phi, ok := instr.(*ssa.Phi)
-				if ok {
-					phis = append(phis, phi)
-				} else {
-					otherInstrs = append(otherInstrs, instr)
-				}
-			}
-		}
+		bl := &f.layout.blocks[f.block.Index]
 
 		//2 先执行开头的全部phi指令
-		f.executePhis(phis)
+		f.executePhis(bl.phis)
 
 		//3 执行别的指令
 		{
-			for _, instr := range otherInstrs {
+			for _, instr := range bl.others {
 				// 解释执行每条指令
 				oldBlock := f.block
 				jumped := f.execute(instr)
@@ -112,6 +80,10 @@ func (f *Frame) run() {
 
 // 执行 Phi 指令，根据前一个基本块的值选择正确的分支。
 func (f *Frame) executePhis(phis []*ssa.Phi) {
+	if len(phis) == 0 {
+		return // 绝大多数块没有 phi，直接跳过
+	}
+
 	var edgeValues []Value
 	for _, phi := range phis {
 		//找到从前驱块来的那条边对应的值

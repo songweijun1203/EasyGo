@@ -3,6 +3,7 @@ package xinterp
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
@@ -18,6 +19,9 @@ type Interp struct {
 
 	// 用导入路径快速查找 SSA 包
 	packagesByPath map[string]*ssa.Package
+
+	layoutMu sync.RWMutex                  // 保护 layouts
+	layouts  map[*ssa.Function]*funcLayout // 函数布局缓存
 }
 
 func NewInterp() *Interp {
@@ -64,6 +68,11 @@ func (i *Interp) Load(
 	i.sourcePkgs = pkgs
 	i.ssaPkgs = ssaPkgs
 	i.globals = make(map[*ssa.Global]*Cell)
+
+	i.layoutMu.Lock()
+	i.layouts = make(map[*ssa.Function]*funcLayout)
+	i.layoutMu.Unlock()
+
 	i.packagesByPath = make(map[string]*ssa.Package)
 
 	for _, pkg := range ssaPkgs {

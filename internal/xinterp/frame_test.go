@@ -1,48 +1,13 @@
 package xinterp // 注意：这里必须是 xinterp，而不是 xinterp_test
 
 import (
-	"go/types"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
-	"golang.org/x/tools/go/ssa"
-	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-// setupSSA 是一个辅助函数，用于在测试中设置 SSA 环境。
-// 准备环境，只加载一次，后面的测试共用
-func setupSSA(t *testing.T) []*packages.Package {
-	cfg := &packages.Config{
-		Mode: packages.LoadAllSyntax,
-		Dir:  "./",
-	}
-	pkgs, err := packages.Load(cfg, "./")
-	if err != nil || packages.PrintErrors(pkgs) > 0 {
-		t.Fatal("加载包失败")
-	}
-	return pkgs
-}
-
-// 按照字符串查找函数
-func findFunctionByName(t *testing.T, pkgs []*packages.Package, funcName string) *ssa.Function {
-	prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
-	prog.Build()
-
-	for _, pkg := range pkgs {
-		for _, mem := range pkg.Types.Scope().Names() {
-			if obj, ok := pkg.Types.Scope().Lookup(mem).(*types.Func); ok {
-				if fn := prog.FuncValue(obj); fn != nil && fn.Name() == funcName {
-					return fn
-				}
-			}
-		}
-	}
-	t.Fatalf("没找到函数: %s", funcName)
-	return nil
-}
-
 func TestControlFlow(t *testing.T) {
-	//pkgs := setupSSA(t)
+	packagePath := "EasyGo/internal/xinterp"
 	interp := NewInterp()
 	err := interp.Load(
 		&packages.Config{
@@ -52,13 +17,12 @@ func TestControlFlow(t *testing.T) {
 		"./",
 	)
 	if err != nil {
-		return
+		t.Fatalf("Load 失败: %v", err)
 	}
 
-	pkgs := interp.sourcePkgs
 	// 测试 1：add (线性)
 	{
-		addFn := findFunctionByName(t, pkgs, "add")
+		addFn, _ := interp.LookupFunction(packagePath, "add")
 		result := interp.RunFunction(addFn, 10, 20)
 
 		if result != 30 {
@@ -69,7 +33,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 2：max (if)
 	{
-		maxFn := findFunctionByName(t, pkgs, "max")
+		maxFn, _ := interp.LookupFunction(packagePath, "max")
 		result := interp.RunFunction(maxFn, 10, 20)
 
 		if result != 20 {
@@ -80,7 +44,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 3：sum (for)
 	{
-		sumFn := findFunctionByName(t, pkgs, "sum")
+		sumFn, _ := interp.LookupFunction(packagePath, "sum")
 		result := interp.RunFunction(sumFn, 5)
 
 		if result != 15 {
@@ -91,7 +55,8 @@ func TestControlFlow(t *testing.T) {
 
 	//测试4 函数调用
 	{
-		addAndmulFn := findFunctionByName(t, pkgs, "addAndMul")
+		addAndmulFn, _ := interp.LookupFunction(packagePath, "addAndMul")
+
 		result := interp.RunFunction(addAndmulFn, 2, 5, 2)
 
 		if result != 14 {
@@ -102,7 +67,7 @@ func TestControlFlow(t *testing.T) {
 
 	//测试5 内建函数的调用
 	{
-		builtinFn := findFunctionByName(t, pkgs, "testBuiltin")
+		builtinFn, _ := interp.LookupFunction(packagePath, "testBuiltin")
 		gotBuiltin := interp.RunFunction(builtinFn)
 		if gotBuiltin != 5 {
 			t.Fatalf("testBuiltin 失败: got %v, want 5", gotBuiltin)
@@ -111,7 +76,7 @@ func TestControlFlow(t *testing.T) {
 
 	//测试6 外部库调用
 	{
-		upperFn := findFunctionByName(t, pkgs, "testExternalUpper")
+		upperFn, _ := interp.LookupFunction(packagePath, "testExternalUpper")
 		got := interp.RunFunction(upperFn)
 
 		if got != "HELLO" {
@@ -122,7 +87,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试7 全局变量测试
 	{
-		printFn := findFunctionByName(t, pkgs, "printCount")
+		printFn, _ := interp.LookupFunction(packagePath, "printCount")
 		interp.RunFunction(printFn)
 		interp.RunFunction(printFn)
 		interp.RunFunction(printFn)
@@ -130,36 +95,36 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试8 多返回值
 	{
-		Fn := findFunctionByName(t, pkgs, "testSwap")
+		Fn, _ := interp.LookupFunction(packagePath, "testSwap")
 		interp.RunFunction(Fn)
 	}
 
 	// 测试9 print
 	{
-		Fn := findFunctionByName(t, pkgs, "myPrintIn")
+		Fn, _ := interp.LookupFunction(packagePath, "myPrintIn")
 		interp.RunFunction(Fn)
 	}
 
 	// 测试10 struct测试
 	{
-		Fn := findFunctionByName(t, pkgs, "testStruct")
+		Fn, _ := interp.LookupFunction(packagePath, "testStruct")
 		interp.RunFunction(Fn)
 	}
 
 	// 测试 11：append
 	{
-		Fn := findFunctionByName(t, pkgs, "testAppend")
+		Fn, _ := interp.LookupFunction(packagePath, "testAppend")
 		interp.RunFunction(Fn)
 	}
 
 	{
-		Fn := findFunctionByName(t, pkgs, "printSlice")
+		Fn, _ := interp.LookupFunction(packagePath, "printSlice")
 		interp.RunFunction(Fn)
 	}
 
 	// 测试 12：map 写入、更新和读取
 	{
-		fn := findFunctionByName(t, pkgs, "testMapUpdate")
+		fn, _ := interp.LookupFunction(packagePath, "testMapUpdate")
 		result := interp.RunFunction(fn)
 		if result != 42 {
 			t.Fatalf("testMapUpdate() = %v, want 42", result)
@@ -168,13 +133,13 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 13：闭包测试
 	{
-		Fn := findFunctionByName(t, pkgs, "testClosure")
+		Fn, _ := interp.LookupFunction(packagePath, "testClosure")
 		interp.RunFunction(Fn)
 	}
 
 	// 测试 14：对形参取地址只修改被调用函数中的参数副本
 	{
-		fn := findFunctionByName(t, pkgs, "testParamAddress")
+		fn, _ := interp.LookupFunction(packagePath, "testParamAddress")
 		if result := interp.RunFunction(fn); result != 1099 {
 			t.Fatalf("testParamAddress() = %v, want 1099", result)
 		}
@@ -182,7 +147,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 15：指针参数保留地址并写回调用者的存储槽
 	{
-		fn := findFunctionByName(t, pkgs, "testPointerParam")
+		fn, _ := interp.LookupFunction(packagePath, "testPointerParam")
 		if result := interp.RunFunction(fn); result != 7 {
 			t.Fatalf("testPointerParam() = %v, want 7", result)
 		}
@@ -190,7 +155,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 16：Phi 在分支汇合时保留指针值，不读取 Cell 内容
 	{
-		fn := findFunctionByName(t, pkgs, "testPointerPhi")
+		fn, _ := interp.LookupFunction(packagePath, "testPointerPhi")
 		if result := interp.RunFunction(fn, false); result != 92 {
 			t.Fatalf("testPointerPhi(false) = %v, want 92", result)
 		}
@@ -201,7 +166,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 17：range map 累加所有 value（顺序无关，断言安全）
 	{
-		fn := findFunctionByName(t, pkgs, "testRangeMap")
+		fn, _ := interp.LookupFunction(packagePath, "testRangeMap")
 		if result := interp.RunFunction(fn); result != 6 {
 			t.Fatalf("testRangeMap() = %v, want 6", result)
 		}
@@ -209,7 +174,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 18：range string 的 key 是字节下标，必须按 UTF-8 宽度前进
 	{
-		fn := findFunctionByName(t, pkgs, "testRangeStringUTF8")
+		fn, _ := interp.LookupFunction(packagePath, "testRangeStringUTF8")
 		if result := interp.RunFunction(fn); result != 3 {
 			t.Fatalf("testRangeStringUTF8() = %v, want 3", result)
 		}
@@ -217,7 +182,7 @@ func TestControlFlow(t *testing.T) {
 
 	// 测试 19：range string 的 value 是 rune，且与本解释器 int 归一化自洽
 	{
-		fn := findFunctionByName(t, pkgs, "testRangeStringValue")
+		fn, _ := interp.LookupFunction(packagePath, "testRangeStringValue")
 		if result := interp.RunFunction(fn); result != 20110 {
 			t.Fatalf("testRangeStringValue() = %v, want 20110", result)
 		}
